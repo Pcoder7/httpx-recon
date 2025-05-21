@@ -1,1 +1,125 @@
+name: Parallel HTTPX Probe
 
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  LINES_PER_CHUNK: 100     # <— maximum lines per file
+  MAX_PARALLEL: 15         # <— throttle HTTPX jobs
+
+jobs:
+  prepare_matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set_matrix.outputs.matrix }}
+      unique_domains: ${{ steps.set_matrix.outputs.unique_domains }}
+    steps:
+      - uses: actions/checkout@v3
+        with: { fetch-depth: 0 }
+
+      - name: Discover domains & split into chunks
+        id: set_matrix
+        run: |
+          # 1. Find all subdirs in results/ containing all_resolved.txt
+          domains=( $(find results -maxdepth 1 -type d -printf "%f\n") )
+
+          # 2. For each domain, split its file into 100‑line parts
+          matrix_items=()
+          for d in "${domains[@]}"; do
+            src="results/$d/all_resolved.txt"
+            [ -f "$src" ] || continue
+
+            mkdir -p chunks/$d
+            split -l $LINES_PER_CHUNK --numeric-suffixes=1 --suffix-length=2 \
+                  "$src" chunks/$d/chunk_
+
+            # Collect each chunk as a matrix entry
+            for f in chunks/$d/chunk_*; do
+              matrix_items+=( "{\"domain\":\"$d\",\"chunk\":\"$f\"}" )
+            done
+          done
+
+          # Emit JSON arrays
+          matrix_json="[${matrix_items[*]}]"
+          domains_json=$(printf '%s\n' "${domains[@]}" | jq -R . | jq -s .)
+
+          echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
+          echo "unique_domains=$domains_json" >> $GITHUB_OUTPUT
+
+      - name: Upload chunks as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: httpx-chunks
+          path: chunks
+
+  httpx:
+    needs: prepare_matrix
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        pair: ${{ fromJson(needs.prepare_matrix.outputs.matrix) }}
+      max-parallel: ${{ env.MAX_PARALLEL }}
+      fail-fast: false
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup httpx & tools
+        run: |
+          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+
+      - name: Download chunk artifact
+        uses: actions/download-artifact@v4
+        with: { name: httpx-chunks, path: chunks }
+
+      - name: Run httpx on chunk
+        run: |
+          D=${{ matrix.pair.domain }}
+          C=${{ matrix.pair.chunk }}
+          out="httpx_out/${D}"
+          mkdir -p "$out"
+          httpx -l "$C" \
+                -o "$out/httpx_$(basename $C).txt" \
+                -threads 50 \
+                -silent
+
+      - name: Upload per‑chunk httpx results
+        uses: actions/upload-artifact@v4
+        with:
+          name: httpx_${{ matrix.pair.domain }}_
+          path: |
+            httpx_out/${{ matrix.pair.domain }}/httpx_*.txt
+
+  aggregate_results:
+    needs: [prepare_matrix, httpx]
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: 
+        domain: ${{ fromJson(needs.prepare_matrix.outputs.unique_domains) }}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download all httpx artifacts
+        uses: actions/download-artifact@v4
+
+      - name: Aggregate for ${{ matrix.domain }}
+        run: |
+          D="${{ matrix.domain }}"
+          outdir="results/$D"
+          mkdir -p "$outdir"
+
+          # Gather all httpx_*.txt for this domain
+          cat httpx_out/${D}/httpx_*.txt \
+            | sort -u > "$outdir/httpx_result.txt"
+
+      - name: Commit & push single httpx_result.txt
+        run: |
+          git config user.name github-actions[bot]
+          git config user.email actions@github.com
+          git add results/${{ matrix.domain }}/httpx_result.txt
+          git diff --cached --quiet || git commit -m "HTTPX results for ${{ matrix.domain }}"
+          git pull --rebase --autostash
+          git push            
