@@ -20,87 +20,84 @@ jobs:
       - uses: actions/checkout@v3
         with: { fetch-depth: 0 }
 
-      - name: Discover domains & split into chunks
+      - name: Build domain–chunk matrix
         id: set_matrix
         run: |
-          # 1. Find all subdirs in results/ containing all_resolved.txt
-          domains=( $(find results -maxdepth 1 -type d -printf "%f\n") )
+          # 1. List dirs under results/ with all_resolved.txt
+          domains=( $(find results -mindepth 1 -maxdepth 1 -type d -printf "%f\n") )
 
-          # 2. For each domain, split its file into 100‑line parts
           matrix_items=()
           for d in "${domains[@]}"; do
             src="results/$d/all_resolved.txt"
             [ -f "$src" ] || continue
 
+            # 2. Split into ≤100‑line files under chunks/<domain>/
             mkdir -p chunks/$d
-            split -l $LINES_PER_CHUNK --numeric-suffixes=1 --suffix-length=2 \
+            split -l 100 --numeric-suffixes=1 --suffix-length=2 \
                   "$src" chunks/$d/chunk_
 
-            # Collect each chunk as a matrix entry
+            # 3. Add each chunk to the matrix
             for f in chunks/$d/chunk_*; do
               matrix_items+=( "{\"domain\":\"$d\",\"chunk\":\"$f\"}" )
             done
           done
 
-          # Emit JSON arrays
-          matrix_json="[${matrix_items[*]}]"
-          domains_json=$(printf '%s\n' "${domains[@]}" | jq -R . | jq -s .)
-
-          echo "matrix=$matrix_json" >> $GITHUB_OUTPUT
-          echo "unique_domains=$domains_json" >> $GITHUB_OUTPUT
-
-      - name: Upload chunks as artifact
+          # 4. Emit JSON outputs
+          echo "matrix=[${matrix_items[*]}]" >> $GITHUB_OUTPUT
+          printf '%s\n' "${domains[@]}" | jq -R . | jq -s . \
+            | xargs -0 printf 'unique_domains=%s\n' >> $GITHUB_OUTPUT
+      - name: Upload chunks artifact
         uses: actions/upload-artifact@v4
         with:
           name: httpx-chunks
           path: chunks
-
+  
   httpx:
     needs: prepare_matrix
     runs-on: ubuntu-latest
     strategy:
       matrix:
         pair: ${{ fromJson(needs.prepare_matrix.outputs.matrix) }}
-      max-parallel: ${{ env.MAX_PARALLEL }}
+      max-parallel: 15
       fail-fast: false
 
     steps:
       - uses: actions/checkout@v3
 
-      - name: Setup httpx & tools
-        run: |
-          go install github.com/projectdiscovery/httpx/cmd/httpx@latest
+      - name: Setup httpx
+        run: go install github.com/projectdiscovery/httpx/cmd/httpx@latest
 
-      - name: Download chunk artifact
+      - name: Download chunk files
         uses: actions/download-artifact@v4
-        with: { name: httpx-chunks, path: chunks }
+        with: 
+          name: httpx-chunks 
+          path: chunks 
 
-      - name: Run httpx on chunk
+      - name: Probe with httpx on ${{ matrix.pair.domain }}
         run: |
           D=${{ matrix.pair.domain }}
           C=${{ matrix.pair.chunk }}
-          out="httpx_out/${D}"
-          mkdir -p "$out"
-          httpx -l "$C" \
-                -o "$out/httpx_$(basename $C).txt" \
-                -threads 50 \
-                -silent
+          OUTDIR="httpx_out/$D"
+          mkdir -p "$OUTDIR"
 
+          # this writes e.g. httpx_out/bmw_com/httpx_chunk_01.txt
+          httpx -l "$C" -silent -threads 50 \
+            -o "$OUTDIR/httpx_$(basename $C).txt"
       - name: Upload per‑chunk httpx results
         uses: actions/upload-artifact@v4
         with:
-          name: httpx_${{ matrix.pair.domain }}_
-          path: |
-            httpx_out/${{ matrix.pair.domain }}/httpx_*.txt
+          name: httpx-${{ matrix.pair.domain }}
+          path: httpx_out/${{ matrix.pair.domain }}/httpx_*.txt
 
   aggregate_results:
     needs: [prepare_matrix, httpx]
     runs-on: ubuntu-latest
     strategy:
-      matrix: 
+      matrix:
         domain: ${{ fromJson(needs.prepare_matrix.outputs.unique_domains) }}
     steps:
       - uses: actions/checkout@v3
+        with: { fetch-depth: 0 }
 
       - name: Download all httpx artifacts
         uses: actions/download-artifact@v4
@@ -108,18 +105,23 @@ jobs:
       - name: Aggregate for ${{ matrix.domain }}
         run: |
           D="${{ matrix.domain }}"
-          outdir="results/$D"
-          mkdir -p "$outdir"
+          # make sure domain dir exists (matches chunks and recon)
+          mkdir -p results/"$D"
 
-          # Gather all httpx_*.txt for this domain
-          cat httpx_out/${D}/httpx_*.txt \
-            | sort -u > "$outdir/httpx_result.txt"
+          # cat only this domain’s httpx files
+          cat httpx_out/"$D"/httpx_*.txt \
+            | sort -u \
+            > results/"$D"/httpx_result.txt
 
-      - name: Commit & push single httpx_result.txt
+      - name: Commit & push HTTPX result for ${{ matrix.domain }}
         run: |
-          git config user.name github-actions[bot]
-          git config user.email actions@github.com
-          git add results/${{ matrix.domain }}/httpx_result.txt
-          git diff --cached --quiet || git commit -m "HTTPX results for ${{ matrix.domain }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+
+          TARGET="results/${{ matrix.domain }}/httpx_result.txt"
+          git add "$TARGET"
+          git diff --cached --quiet || git commit -m "HTTPX result for ${{ matrix.domain }}"
+          git pull --rebase --autostash origin main
+          git push origin HEAD:main
           git pull --rebase --autostash
           git push            
