@@ -42,10 +42,12 @@ jobs:
             done
           done
 
-          # 4. Emit JSON outputs
-          echo "matrix=[${matrix_items[*]}]" >> $GITHUB_OUTPUT
-          printf '%s\n' "${domains[@]}" | jq -R . | jq -s . \
-            | xargs -0 printf 'unique_domains=%s\n' >> $GITHUB_OUTPUT
+          # 4. Emit JSON outputs >> $GITHUB_OUTPUT
+          {
+          echo "unique_domains<<EOF"
+          printf '%s\n' "${domains[@]}" | jq -R . | jq -s .
+          echo "EOF"
+          } >> $GITHUB_OUTPUT
       - name: Upload chunks artifact
         uses: actions/upload-artifact@v4
         with:
