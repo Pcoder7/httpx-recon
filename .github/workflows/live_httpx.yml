@@ -19,35 +19,44 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with: { fetch-depth: 0 }
-
-      - name: Build domain–chunk matrix
+      - name: Build domain matrix from results/*/all_resolved.txt
         id: set_matrix
         run: |
-          # 1. List dirs under results/ with all_resolved.txt
-          domains=( $(find results -mindepth 1 -maxdepth 1 -type d -printf "%f\n") )
+          # 1. Discover directories under results/ that contain all_resolved.txt
+          mapfile -t domains < <(
+            find results -mindepth 1 -maxdepth 1 -type d \
+              -exec test -f "{}/all_resolved.txt" \; -print \
+            | sed 's|results/||'
+          )
 
-          matrix_items=()
-          for d in "${domains[@]}"; do
-            src="results/$d/all_resolved.txt"
-            [ -f "$src" ] || continue
-
-            # 2. Split into ≤100‑line files under chunks/<domain>/
-            mkdir -p chunks/$d
-            split -l 100 --numeric-suffixes=1 --suffix-length=2 \
-                  "$src" chunks/$d/chunk_
-
-            # 3. Add each chunk to the matrix
-            for f in chunks/$d/chunk_*; do
-              matrix_items+=( "{\"domain\":\"$d\",\"chunk\":\"$f\"}" )
+          # 2. If no domains are found, emit an empty matrix
+          if [ ${#domains[@]} -eq 0 ]; then
+            echo "No domains found under results/ — emitting empty matrix."
+            matrix_json="[]"
+          else
+            # 3. Build a JSON array of objects: { "domain": "<name>" }
+            entries=()
+            for d in "${domains[@]}"; do
+              entries+=( "{\"domain\":\"$d\"}" )
             done
-          done
+            matrix_json="[${entries[*]}]"
+          fi
 
-          # 4. Emit JSON outputs >> $GITHUB_OUTPUT
+          # 4. Emit domain matrix as a multi-line GitHub Actions output
           {
-          echo "unique_domains<<EOF"
-          printf '%s\n' "${domains[@]}" | jq -R . | jq -s .
-          echo "EOF"
-          } >> $GITHUB_OUTPUT
+            echo "matrix<<MATRIX_EOF"
+            echo "${matrix_json}"
+            echo "MATRIX_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          # 5. Emit pure domain list as JSON array
+          domains_json=$(printf '%s\n' "${domains[@]}" | jq -R . | jq -s .)
+          {
+            echo "unique_domains<<DOMAINS_EOF"
+            echo "${domains_json}"
+            echo "DOMAINS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Upload chunks artifact
         uses: actions/upload-artifact@v4
         with:
