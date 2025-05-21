@@ -8,7 +8,7 @@ permissions:
 
 env:
   LINES_PER_CHUNK: 100     # <— maximum lines per file
-  MAX_PARALLEL: 15         # <— throttle HTTPX jobs
+  MAX_PARALLEL: 5         # <— throttle HTTPX jobs
 
 jobs:
   prepare_matrix:
