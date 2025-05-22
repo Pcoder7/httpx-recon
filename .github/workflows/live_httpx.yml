@@ -235,7 +235,7 @@ jobs:
           D="${{ matrix.domain }}"
           # make sure domain dir exists (matches chunks and recon)
           mkdir -p results/"$D"/httpx_out
-          ls -R results/
+          ls -A results
 
           # cat only this domain’s httpx files
           cat results/"$D"/httpx_out/*.txt \
