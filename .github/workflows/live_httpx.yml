@@ -112,6 +112,17 @@ jobs:
         with:
           go-version: '1.22'
 
+      - name: Cache httpx
+        uses: actions/cache@v3
+        with:
+          path: |
+            $HOME/go/pkg/mod
+            ~/.cache/go-build
+            $HOME/go/bin
+          key: ${{ runner.os }}-go-${{ hashFiles('/home/runner/go/bin/httpx') }}-tools
+          restore-keys: |
+            ${{ runner.os }}-go-${{ hashFiles('/home/runner/go/bin/httpx') }}-          
+
       - name: Ensure httpx & anew are installed
         run: |
           sudo apt install locate
@@ -120,7 +131,7 @@ jobs:
             echo "httpx installed"
             find $HOME -name httpx -type f
             echo "find actually found httpx path"
-            locate httpx
+            
           else
             echo "httpx already cached"
           fi
