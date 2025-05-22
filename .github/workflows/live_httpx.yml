@@ -19,51 +19,59 @@ jobs:
     steps:
       - uses: actions/checkout@v3
         with: { fetch-depth: 0 }
+
       - name: Build domain matrix from results/*/all_resolved.txt
         id: set_matrix
         run: |
-          # 1. Discover directories under results/ that contain all_resolved.txt
+          # 1. Discover domain folders with all_resolved.txt
           mapfile -t domains < <(
             find results -mindepth 1 -maxdepth 1 -type d \
               -exec test -f "{}/all_resolved.txt" \; -print \
             | sed 's|results/||'
           )
-
+      
           # 2. If no domains are found, emit an empty matrix
           if [ ${#domains[@]} -eq 0 ]; then
             echo "No domains found under results/ — emitting empty matrix."
-            # No chunks, so empty pairs array
             echo "matrix<<EOF" >> $GITHUB_OUTPUT
-            echo "[]"              >> $GITHUB_OUTPUT
-            echo "EOF"             >> $GITHUB_OUTPUT
-            # We still emit unique_domains below
+            echo "[]"           >> $GITHUB_OUTPUT
+            echo "EOF"          >> $GITHUB_OUTPUT
           else
-            
-              pairs=()
-              for d in "${domains[@]}"; do
+            pairs=()
+      
+            for d in "${domains[@]}"; do
               SRC="results/$d/all_resolved.txt"
-              mkdir -p "results/$d/chunks"
+      
+              # 3. Create per-domain chunk dir & split into 100-line files
+              CHUNK_DIR="results/$d/chunks"
+              mkdir -p "$CHUNK_DIR"
               split -l 100 --numeric-suffixes=1 --suffix-length=2 \
-                    "$SRC" "results/$d/chunks/chunk_"
-   
-                # Build JSON pair for each chunk
-                for CH in results/"$d"/chunks/chunk_*; do
-                  pairs+=( "{\"domain\":\"$d\",\"chunk\":\"$CH\"}" )
+                    "$SRC" "$CHUNK_DIR/chunk_"
+      
+              # 4. Debug: list out what we just created
+              echo "Contents of $CHUNK_DIR:"
+              ls -R "$CHUNK_DIR" || echo "(none found)"
+      
+              # 5. Build a JSON pair for each chunk file
+              for CH in "$CHUNK_DIR"/chunk_*; do
+                pairs+=( "{\"domain\":\"$d\",\"chunk\":\"$CH\"}" )
               done
             done
-              # 4. Emit the chunk-level matrix
-            echo "matrix<<EOF"  >> $GITHUB_OUTPUT
+      
+            # 6. Emit the chunk-level matrix
+            echo "matrix<<EOF" >> $GITHUB_OUTPUT
             printf '%s\n' "${pairs[@]}" | jq -s . >> $GITHUB_OUTPUT
-            echo "EOF"           >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
           fi
-
-          # 5. Emit pure domain list as JSON array
+      
+          # 7. Emit the unique domain list (unchanged)
           domains_json=$(printf '%s\n' "${domains[@]}" | jq -R . | jq -s .)
           {
-            echo "unique_domains<<DOMAINS_EOF"
+            echo "unique_domains<<EOF"
             echo "${domains_json}"
-            echo "DOMAINS_EOF"
-          } >> "$GITHUB_OUTPUT"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"    
+                
 
       - name: Upload chunks artifact
         uses: actions/upload-artifact@v4
@@ -78,7 +86,7 @@ jobs:
     strategy:
       matrix:
         pair: ${{ fromJson(needs.prepare_matrix.outputs.matrix) }}
-      max-parallel: 15
+      max-parallel: 5
 
     steps:
       - uses: actions/checkout@v3
