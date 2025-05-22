@@ -225,10 +225,7 @@ jobs:
 
       - name: Download all httpx artifacts
         uses: actions/download-artifact@v4
-        env:
-          ART_NAME: ${{ steps.art.outputs.artifact_name }}
         with:
-          name: ${{ env.ART_NAME }}
           path: results
 
       - name: Aggregate for ${{ matrix.domain }}
@@ -239,7 +236,8 @@ jobs:
           ls -A results
 
           # cat only this domain’s httpx files
-          cat results/"$D"/httpx_out/*.txt \
+          find . -type f -name "httpx-${D}-chunk_*.txt" -print0 \
+            | xargs -0 cat \
             | anew -q results/"$D"/httpx_result.txt
 
       - name: Commit & push HTTPX result for ${{ matrix.domain }}
