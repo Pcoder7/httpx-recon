@@ -114,6 +114,7 @@ jobs:
 
       - name: Ensure httpx & anew are installed
         run: |
+          sudo apt install locate
           if ! command -v httpx >/dev/null; then
             go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
             locate httpx
