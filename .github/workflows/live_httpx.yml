@@ -185,7 +185,8 @@ jobs:
           ART_NAME: ${{ steps.art.outputs.artifact_name }}
         with:
           name: ${{ env.ART_NAME }}
-          path: results/${{ matrix.pair.domain }}/httpx_out/
+          path: results/${{ matrix.pair.domain }}/httpx_out/*.txt
+
 
   aggregate_results:
     needs: [prepare_matrix, httpx]
