@@ -168,7 +168,7 @@ jobs:
       - name: Upload per‑chunk httpx results
         uses: actions/upload-artifact@v4
         with:
-          name: httpx-${{ matrix.pair.domain }}
+          name: ${{ steps.set_art_name.outputs.artifact_name }}
           path: results/${{ matrix.pair.domain }}/httpx_out/httpx_*.txt
 
   aggregate_results:
@@ -213,10 +213,10 @@ jobs:
         run: |
           D="${{ matrix.domain }}"
           # make sure domain dir exists (matches chunks and recon)
-          mkdir -p results/"$D"
+          mkdir -p results/"$D"/httpx_out
 
           # cat only this domain’s httpx files
-          cat httpx_out/"$D"/httpx_*.txt \
+          cat results/"$D"/httpx_out/httpx_*.txt \
             | anew -q results/"$D"/httpx_result.txt
 
       - name: Commit & push HTTPX result for ${{ matrix.domain }}
