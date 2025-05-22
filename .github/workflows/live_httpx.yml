@@ -164,6 +164,15 @@ jobs:
           echo "▶ Probing chunk: $CH"
           httpx -l "$CH" -silent -threads 50 \
             -o "${OUT}/httpx_$(basename "$CH").txt"
+      
+      - name: Compute per-chunk artifact name
+        id: art
+        run: |
+          D=${{ matrix.pair.domain }}
+          CHN=$(basename "${{ matrix.pair.chunk }}")
+          # this writes an output called 'artifact_name'
+          echo "artifact_name=httpx-${D}-${CHN}" >> $GITHUB_OUTPUT
+            
           
       - name: Upload per‑chunk httpx results
         uses: actions/upload-artifact@v4
