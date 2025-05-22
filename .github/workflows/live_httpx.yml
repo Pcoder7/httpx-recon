@@ -11,7 +11,7 @@ permissions:
 
 env:
   LINES_PER_CHUNK: 100     # <— maximum lines per file
-  MAX_PARALLEL: 5         # <— throttle HTTPX jobs
+  MAX_PARALLEL: 10         # <— throttle HTTPX jobs
 
 jobs:
   prepare_matrix:
@@ -100,7 +100,7 @@ jobs:
     strategy:
       matrix:
         pair: ${{ fromJson(needs.prepare_matrix.outputs.matrix) }}
-      max-parallel: 5
+      max-parallel: 10
 
     steps:
     
