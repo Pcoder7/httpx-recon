@@ -181,7 +181,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.set_art_name.outputs.artifact_name }}
-          path: results/${{ matrix.pair.domain }}/httpx_out/httpx_*.txt
+          path: results/${{ matrix.pair.domain }}/httpx_out/
 
   aggregate_results:
     needs: [prepare_matrix, httpx]
