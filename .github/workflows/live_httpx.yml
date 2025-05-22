@@ -116,8 +116,14 @@ jobs:
         uses: actions/download-artifact@v4
         with: 
           name: httpx-chunks 
-          path: results
-
+          path: .
+      
+      - name: Debug: list chunk files
+        run: |
+          D="${{ matrix.pair.domain }}"
+          echo "Contents of results/${D}/chunks:"
+          ls -R "results/${D}/chunks"
+      
       - name: Probe with httpx on ${{ matrix.pair.domain }}
         run: |
          
