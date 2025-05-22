@@ -18,7 +18,8 @@ jobs:
       unique_domains: ${{ steps.set_matrix.outputs.unique_domains }}
     steps:
       - uses: actions/checkout@v3
-        with: { fetch-depth: 0 }
+        with: 
+          fetch-depth: 0 
 
       - name: Build domain matrix from results/*/all_resolved.txt
         id: set_matrix
