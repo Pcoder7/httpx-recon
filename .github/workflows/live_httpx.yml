@@ -1,11 +1,14 @@
 name: Parallel HTTPX Probe
 
 on:
-  workflow_run:
-    workflows: 
-      - "Parallel Subdomain Enumeration and Live Host Check"
-    types:
-      - completed
+  workflow_dispatch:
+    inputs:
+      results_repo:
+        type: string
+        required: true
+      artifact_name:
+        type: string
+        required: true
 
 permissions:
   contents: write
@@ -31,6 +34,7 @@ jobs:
       - name: Download recon-results artifact
         uses: actions/download-artifact@v4
         with:
+          name: ${{ github.event.inputs.artifact_name }}       
           path: results/
           
       - name: Build domain matrix from results/*/all_resolved.txt
