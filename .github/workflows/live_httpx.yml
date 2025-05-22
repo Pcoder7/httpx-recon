@@ -126,6 +126,7 @@ jobs:
           else
             echo "anew already cached"
           fi
+          ls -R "results"
 
       - name: Download chunk files
         uses: actions/download-artifact@v4
