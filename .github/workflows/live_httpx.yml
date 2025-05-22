@@ -3,7 +3,7 @@ name: Parallel HTTPX Probe
 on:
   workflow_run:
       workflows: ["Parallel Subdomain Enumeration and Live Host Check"]
-    types:
+  types:
       - completed
 
 permissions:
