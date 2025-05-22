@@ -117,13 +117,16 @@ jobs:
           sudo apt install locate
           if ! command -v httpx >/dev/null; then
             go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+            echo "httpx installed"
+            find $HOME -name httpx -type f
+            echo "find actually found httpx path"
             locate httpx
           else
             echo "httpx already cached"
           fi
           if ! command -v anew >/dev/null; then
             go install -v github.com/tomnomnom/anew@latest
-            locate httpx
+            
           else
             echo "anew already cached"
           fi
