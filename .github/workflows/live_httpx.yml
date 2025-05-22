@@ -30,7 +30,6 @@ jobs:
       - name: Download recon-results artifact
         uses: actions/download-artifact@v4
         with:
-          name: recon-results
           path: results/
           
       - name: Build domain matrix from results/*/all_resolved.txt
@@ -40,7 +39,7 @@ jobs:
           mapfile -t domains < <(
             find results -mindepth 1 -maxdepth 1 -type d \
               -exec test -f "{}/all_resolved.txt" \; -print \
-            | sed 's|results/||'
+            | sed -e 's|results/recon-results-||'
           )
       
           # 2. If no domains are found, emit an empty matrix
