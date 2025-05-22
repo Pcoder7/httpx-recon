@@ -112,14 +112,28 @@ jobs:
 
       - name: Probe with httpx on ${{ matrix.pair.domain }}
         run: |
-          D=${{ matrix.pair.domain }}
-          C=${{ matrix.pair.chunk }}
-          OUTDIR="httpx_out/$D"
-          mkdir -p "$OUTDIR"
-
-          # this writes e.g. httpx_out/bmw_com/httpx_chunk_01.txt
-          httpx -l "$C" -silent -threads 50 \
-            -o "$OUTDIR/httpx_$(basename $C).txt"
+         
+          D="${{ matrix.domain }}"
+          SRC="results/${D}/all_resolved.txt"
+          if [ ! -f "$SRC" ]; then
+            echo "Missing input file: $SRC" >&2
+            exit 1
+          fi
+      
+          # Create a per-domain chunks directory
+          mkdir -p "chunks/${D}"
+          split -l 100 --numeric-suffixes=1 --suffix-length=2 \
+                "$SRC" "chunks/${D}/chunk_"
+      
+          # Create an output directory for this domain
+          mkdir -p "httpx_out/${D}"
+      
+          # Loop over each chunk file
+          for CH in chunks/"${D}"/chunk_*; do
+            httpx -l "$CH" -silent -threads 50 \
+              -o httpx_out/"${D}"/httpx_"$(basename "$CH")".txt
+          done
+          
       - name: Upload per‑chunk httpx results
         uses: actions/upload-artifact@v4
         with:
