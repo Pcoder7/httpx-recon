@@ -226,17 +226,15 @@ jobs:
           # make sure domain dir exists (matches chunks and recon)
           mkdir -p results/"$D"/httpx_out
           ls -A results
-          
-          ls -A http-chunks
-          
+                            
           # cat only this domain’s httpx files
              # show how many lines we actually have across all the chunk files:
           echo "Total lines across chunks:"
-          find results -type f -name "*.txt" -print0 | xargs -0 cat | tee >(wc -l)
+          find results -type f --path "*/httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | tee >(wc -l)
           
            # now dedupe into one file
           echo "deduping files"
-          find results -type f -name "*.txt" -print0 | xargs -0 cat | sort -u > results/"$D"/httpx_result.txt
+          find results -type f -path "*/httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | sort -u > results/"$D"/httpx_result.txt
           wc -l results/"$D"/httpx_result.txt
 
       - name: Commit & push HTTPX result for ${{ matrix.domain }}
