@@ -172,6 +172,9 @@ jobs:
           CHN=$(basename "${{ matrix.pair.chunk }}")
           # this writes an output called 'artifact_name'
           echo "artifact_name=httpx-${D}-${CHN}" >> $GITHUB_OUTPUT
+
+           # debug output so you can see it in the log
+          echo ">> DEBUG: artifact_name is '$ANAME'"
             
           
       - name: Upload per‑chunk httpx results
