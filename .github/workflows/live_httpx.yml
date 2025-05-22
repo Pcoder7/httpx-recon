@@ -230,7 +230,7 @@ jobs:
           # cat only this domain’s httpx files
              # show how many lines we actually have across all the chunk files:
           echo "Total lines across chunks:"
-          find results -type f --path "*/httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | tee >(wc -l)
+          find results -type f -path "*/httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | tee >(wc -l)
           
            # now dedupe into one file
           echo "deduping files"
