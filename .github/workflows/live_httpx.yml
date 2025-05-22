@@ -100,25 +100,17 @@ jobs:
       - uses: actions/checkout@v3
       - name: Create mod cache directory
         run: mkdir -p $HOME/go/pkg/mod
-
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: |
-            $HOME/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ runner.os }}-go-mod-cache
-          restore-keys: |
-            ${{ runner.os }}-go-mod-cache-
       
       - name: Cache Go binaries (httpx, anew)
         uses: actions/cache@v3
         with:
-          path: $HOME/go/bin
-          key: ${{ runner.os }}-go-bin-cache
+          path: |
+            $HOME/go/pkg/mod
+             ~/.cache/go-build
+             $HOME/go/bin
+          key: go-cache-${{ github.ref_name }} 
           restore-keys: |
-            ${{ runner.os }}-go-bin-cache-
+            go-cache-
 
 
 
@@ -205,9 +197,9 @@ jobs:
             $HOME/go/pkg/mod
             ~/.cache/go-build
             $HOME/go/bin
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-tools
+          key: go-cache-${{ github.ref_name }}
           restore-keys: |
-            ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}-
+            go-cache-
 
       - name: Setup Go (for go install)
         uses: actions/setup-go@v5
@@ -235,7 +227,8 @@ jobs:
           mkdir -p results/"$D"/httpx_out
           ls -A results
           # cat only this domain’s httpx files
-          find . -type f -name "httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | anew -q results/"$D"/httpx_result.txt
+          wc -l httpx-${D}-chunk_*.txt
+          find . -type f -name "httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | sort -u > results/"$D"/httpx_result.txt
           wc -l results/"$D"/httpx_result.txt
 
       - name: Commit & push HTTPX result for ${{ matrix.domain }}
