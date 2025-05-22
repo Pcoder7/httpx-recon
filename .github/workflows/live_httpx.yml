@@ -145,7 +145,7 @@ jobs:
         uses: actions/download-artifact@v4
         with: 
           name: httpx-chunks 
-          path: .
+          path: results/
       
       #- name: List chunk files
        # run: |
