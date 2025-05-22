@@ -226,6 +226,8 @@ jobs:
           # make sure domain dir exists (matches chunks and recon)
           mkdir -p results/"$D"/httpx_out
           ls -A results
+          ls -A "$D"
+          ls -A http-chunks
           
           # cat only this domain’s httpx files
              # show how many lines we actually have across all the chunk files:
