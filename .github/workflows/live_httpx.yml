@@ -227,7 +227,7 @@ jobs:
           mkdir -p results/"$D"/httpx_out
           ls -A results
           # cat only this domain’s httpx files
-          wc -l httpx-${D}-chunk_*.txt
+          cat httpx-${D}-chunk_*.txt | wc -l
           find . -type f -name "httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | sort -u > results/"$D"/httpx_result.txt
           wc -l results/"$D"/httpx_result.txt
 
