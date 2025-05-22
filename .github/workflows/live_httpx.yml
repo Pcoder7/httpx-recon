@@ -78,7 +78,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: httpx-chunks
-          path: results/*/chunks
+          path: results/*/chunks/**
   
   httpx:
     needs: prepare_matrix
