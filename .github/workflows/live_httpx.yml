@@ -234,11 +234,9 @@ jobs:
           # make sure domain dir exists (matches chunks and recon)
           mkdir -p results/"$D"/httpx_out
           ls -A results
-
           # cat only this domain’s httpx files
-          find . -type f -name "httpx-${D}-chunk_*.txt" -print0 \
-            | xargs -0 cat \
-            | anew -q results/"$D"/httpx_result.txt
+          find . -type f -name "httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | anew -q results/"$D"/httpx_result.txt
+          wc -l results/"$D"/httpx_result.txt
 
       - name: Commit & push HTTPX result for ${{ matrix.domain }}
         run: |
