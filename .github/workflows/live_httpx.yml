@@ -118,8 +118,7 @@ jobs:
           name: httpx-chunks 
           path: .
       
-      - name: 
-          Debug: list chunk files
+      - name: List chunk files
         run: |
           D="${{ matrix.pair.domain }}"
           echo "Contents of results/${D}/chunks:"
@@ -127,7 +126,7 @@ jobs:
       
       - name: Probe with httpx on ${{ matrix.pair.domain }}
         run: |
-         
+       
           D="${{ matrix.pair.domain }}"
           CH="${{ matrix.pair.chunk }}"
           OUT="results/${D}/httpx_out"
