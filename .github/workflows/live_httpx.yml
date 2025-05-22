@@ -116,11 +116,13 @@ jobs:
         run: |
           if ! command -v httpx >/dev/null; then
             go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
+            locate httpx
           else
             echo "httpx already cached"
           fi
           if ! command -v anew >/dev/null; then
             go install -v github.com/tomnomnom/anew@latest
+            locate httpx
           else
             echo "anew already cached"
           fi
@@ -131,11 +133,11 @@ jobs:
           name: httpx-chunks 
           path: .
       
-      - name: List chunk files
-        run: |
-          D="${{ matrix.pair.domain }}"
-          echo "Contents of results/${D}/chunks:"
-          ls -R "results/${D}/chunks"
+      #- name: List chunk files
+       # run: |
+        #  D="${{ matrix.pair.domain }}"
+         # echo "Contents of results/${D}/chunks:"
+          #ls -R "results/${D}/chunks"
       
       - name: Probe with httpx on ${{ matrix.pair.domain }}
         run: |
