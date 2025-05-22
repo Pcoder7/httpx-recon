@@ -223,7 +223,11 @@ jobs:
 
       - name: Download all httpx artifacts
         uses: actions/download-artifact@v4
-        path: results
+        env:
+          ART_NAME: ${{ steps.art.outputs.artifact_name }}
+        with:
+          name: ${{ env.ART_NAME }}
+          path: results
 
       - name: Aggregate for ${{ matrix.domain }}
         run: |
