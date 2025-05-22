@@ -116,7 +116,7 @@ jobs:
         uses: actions/download-artifact@v4
         with: 
           name: httpx-chunks 
-          path: results/*/chunks
+          path: results
 
       - name: Probe with httpx on ${{ matrix.pair.domain }}
         run: |
