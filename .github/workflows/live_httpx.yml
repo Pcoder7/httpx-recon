@@ -32,22 +32,30 @@ jobs:
           # 2. If no domains are found, emit an empty matrix
           if [ ${#domains[@]} -eq 0 ]; then
             echo "No domains found under results/ — emitting empty matrix."
-            matrix_json="[]"
+            # No chunks, so empty pairs array
+            echo "matrix<<EOF" >> $GITHUB_OUTPUT
+            echo "[]"              >> $GITHUB_OUTPUT
+            echo "EOF"             >> $GITHUB_OUTPUT
+            # We still emit unique_domains below
           else
-            # 3. Build a JSON array of objects: { "domain": "<name>" }
-            entries=()
-            for d in "${domains[@]}"; do
-              entries+=( "{\"domain\":\"$d\"}" )
+            
+              pairs=()
+              for d in "${domains[@]}"; do
+              SRC="results/$d/all_resolved.txt"
+              mkdir -p "results/$d/chunks"
+              split -l 100 --numeric-suffixes=1 --suffix-length=2 \
+                    "$SRC" "results/$d/chunks/chunk_"
+   
+                # Build JSON pair for each chunk
+                for CH in results/"$d"/chunks/chunk_*; do
+                  pairs+=( "{\"domain\":\"$d\",\"chunk\":\"$CH\"}" )
+              done
             done
-            matrix_json="[${entries[*]}]"
+              # 4. Emit the chunk-level matrix
+            echo "matrix<<EOF"  >> $GITHUB_OUTPUT
+            printf '%s\n' "${pairs[@]}" | jq -s . >> $GITHUB_OUTPUT
+            echo "EOF"           >> $GITHUB_OUTPUT
           fi
-
-          # 4. Emit domain matrix as a multi-line GitHub Actions output
-          {
-            echo "matrix<<MATRIX_EOF"
-            echo "${matrix_json}"
-            echo "MATRIX_EOF"
-          } >> "$GITHUB_OUTPUT"
 
           # 5. Emit pure domain list as JSON array
           domains_json=$(printf '%s\n' "${domains[@]}" | jq -R . | jq -s .)
@@ -61,7 +69,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: httpx-chunks
-          path: chunks
+          path: results/*/chunks
   
   httpx:
     needs: prepare_matrix
@@ -108,37 +116,25 @@ jobs:
         uses: actions/download-artifact@v4
         with: 
           name: httpx-chunks 
-          path: chunks 
+          path: results/*/chunks
 
       - name: Probe with httpx on ${{ matrix.pair.domain }}
         run: |
          
-          D="${{ matrix.domain }}"
-          SRC="results/${D}/all_resolved.txt"
-          if [ ! -f "$SRC" ]; then
-            echo "Missing input file: $SRC" >&2
-            exit 1
-          fi
-      
-          # Create a per-domain chunks directory
-          mkdir -p "chunks/${D}"
-          split -l 100 --numeric-suffixes=1 --suffix-length=2 \
-                "$SRC" "chunks/${D}/chunk_"
-      
-          # Create an output directory for this domain
-          mkdir -p "httpx_out/${D}"
-      
-          # Loop over each chunk file
-          for CH in chunks/"${D}"/chunk_*; do
-            httpx -l "$CH" -silent -threads 50 \
-              -o httpx_out/"${D}"/httpx_"$(basename "$CH")".txt
-          done
+          D="${{ matrix.pair.domain }}"
+          CH="${{ matrix.pair.chunk }}"
+          OUT="results/${D}/httpx_out"
+          mkdir -p "$OUT"
+
+          echo "▶ Probing chunk: $CH"
+          httpx -l "$CH" -silent -threads 50 \
+            -o "${OUT}/httpx_$(basename "$CH").txt"
           
       - name: Upload per‑chunk httpx results
         uses: actions/upload-artifact@v4
         with:
           name: httpx-${{ matrix.pair.domain }}
-          path: httpx_out/${{ matrix.pair.domain }}/httpx_*.txt
+          path: results/${{ matrix.pair.domain }}/httpx_out/httpx_*.txt
 
   aggregate_results:
     needs: [prepare_matrix, httpx]
