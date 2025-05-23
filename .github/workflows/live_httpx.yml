@@ -187,7 +187,11 @@ jobs:
           else
             echo "anew already cached"
           fi
-          ls -R "results"
+          echo "ls -R . show"
+          ls -R .
+          echo "\n\n\n ----"
+          echo "ls -R results"
+          ls -R results
 
       - name: Download chunk files
         uses: actions/download-artifact@v4
