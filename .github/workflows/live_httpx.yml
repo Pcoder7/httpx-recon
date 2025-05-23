@@ -46,7 +46,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: ${{ github.event.inputs.artifact_name }}       
-          path: results/
+          path: results
           
       - name: Build domain matrix from results/*/all_resolved.txt
         id: set_matrix
