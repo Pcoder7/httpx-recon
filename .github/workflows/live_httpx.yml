@@ -340,3 +340,18 @@ jobs:
             echo "❌ Failed to push after $MAX attempts"
             exit 1
           fi
+
+      - name: Delete uploaded HTTPX chunk artifacts
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}   # or your PAT if needed
+        run: |
+          # 1. List all artifacts in this repo
+          ARTIFACTS_ID=$(gh api repos/${{ github.repository }}/actions/artifacts \
+            --jq '.artifacts[] | select(.name | startswith("httpx-")) | .id')
+          
+          # 2. Delete each one
+          for ID in $ARTIFACTS_ID; do
+            echo "Deleting artifact ID $ID"
+            gh api --method DELETE /repos/${{ github.repository }}/actions/artifacts/$ID
+          done
+          
