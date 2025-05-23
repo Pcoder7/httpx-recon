@@ -1,5 +1,6 @@
 http://bmwmuseumapp-cmp-int.bmw.com
 http://cesim-de-prod.bmw.com
+http://cfeapi-uat.bmw.com
 http://cfeapi.bmw.com
 http://cloud2cloud.bmw.com
 http://cmp-author-int.bmw.com
@@ -21,6 +22,7 @@ http://lpptest.bmw.com
 http://mndm-pre-n2.bmw.com
 http://motorsport.bmw.com
 http://mwp-s.bmw.com
+http://nfsccoreapi-dev.bmw.com
 http://otdint.bmw.com
 http://qsense-condis-int.bmw.com
 http://sera.bmw.com
@@ -29,7 +31,6 @@ http://socialmedia.bmw.com
 http://spider-i.bmw.com
 http://static.bmw.com
 http://static3.bmw.com
-http://static4.bmw.com
 http://tst-toscar-us.bmw.com
 http://vds-mobile-int.bmw.com
 http://wire-int.bmw.com
@@ -95,7 +96,6 @@ https://cctbankint-rp.bmw.com
 https://cctde.bmw.com
 https://cctza-rp.bmw.com
 https://cert-int.bmw.com
-https://cfeapi-uat.bmw.com
 https://cmsp-author-int.bmw.com
 https://cmxint-author1.bmw.com
 https://cogdev2.bmw.com
@@ -188,7 +188,6 @@ https://mscaksgreen.bmw.com
 https://my-app.bmw.com
 https://mybmw.bmw.com
 https://myworkplace.bmw.com
-https://nfsccoreapi-dev.bmw.com
 https://ocean.bmw.com
 https://ods-prod-b2b.bmw.com
 https://opalint.bmw.com
