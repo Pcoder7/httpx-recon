@@ -37,19 +37,35 @@ jobs:
       - name: Print Inputs (debug)
         run: |
           echo "Results Repo: $RESULTS_REPO"
+          echo "Artifact Name: ${{ github.event.inputs.artifact_name }}"
        
 
       - name: Download recon-results artifact from upstream repo
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
+          echo "Attempting to download artifact: ${{ github.event.inputs.artifact_name }} from repo: ${{ env.RESULTS_REPO }}"         
           gh run download \
             --repo "${{ env.RESULTS_REPO }}" \
             --name "${{ github.event.inputs.artifact_name }}" \
-            --dir .    
+            --dir results    
+
+          echo "Download complete. Checking contents of workspace and results directory:"
+          pwd
+          ls -lA
+          echo "--- Contents of results directory ---"
+          ls -R results
        
-      - name: Debug list downloaded files
-        run: ls -R .
+      - name: Debug list downloaded files and structure
+        run: |
+          echo "Current directory structure:"
+          ls -R .
+          echo "Specifically, contents of ./results:"
+          if [ -d "results" ]; then
+            ls -R results
+          else
+            echo "./results directory does not exist."
+          fi
         
         #- name: Flatten recon-results artifact structure
          # run: |
