@@ -50,7 +50,9 @@ jobs:
             --repo "${{ env.RESULTS_REPO }}" \
             --name "${{ github.event.inputs.artifact_name }}" \
             --dir .     
-
+       
+       - name: Debug list downloaded files
+         run: ls -R results
       #- name: Flatten recon-results artifact structure
        # run: |
         #  ART="${{ github.event.inputs.artifact_name }}"
