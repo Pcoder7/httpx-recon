@@ -29,9 +29,9 @@ http://sera.bmw.com
 http://sf-mco-int.bmw.com
 http://socialmedia.bmw.com
 http://spider-i.bmw.com
-http://static.bmw.com
 http://static2.bmw.com
 http://static3.bmw.com
+http://static4.bmw.com
 http://tst-toscar-us.bmw.com
 http://vds-mobile-int.bmw.com
 http://wire-int.bmw.com
