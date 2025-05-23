@@ -135,6 +135,8 @@ jobs:
         with:
           name: httpx-chunks
           path: results/*/chunks/**
+          retention-days: 1
+          
   
   httpx:
     needs: prepare_matrix
@@ -236,6 +238,7 @@ jobs:
         with:
           name: ${{ env.ART_NAME }}
           path: results/${{ matrix.pair.domain }}/httpx_out/*.txt
+          retention-days: 1
 
 
   aggregate_results:
@@ -346,8 +349,8 @@ jobs:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}   # or your PAT if needed
         run: |
           # 1. List all artifacts in this repo
-          ARTIFACTS_ID=$(gh api repos/${{ github.repository }}/actions/artifacts \
-            --jq '.artifacts[] | select(.name | startswith("httpx-")) | .id')
+          ARTIFACTS_ID=$(gh api /repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts \
+            --jq '.artifacts[] | select(.name|startswith("httpx-")) | .id')
           
           # 2. Delete each one
           for ID in $ARTIFACTS_ID; do
