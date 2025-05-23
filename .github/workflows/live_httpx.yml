@@ -49,7 +49,7 @@ jobs:
             --dir results    
        
       - name: Debug list downloaded files
-        run: ls -R .
+        run: ls -R results
         
         #- name: Flatten recon-results artifact structure
          # run: |
