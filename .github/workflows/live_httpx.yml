@@ -38,6 +38,11 @@ jobs:
         with: 
           fetch-depth: 0 
 
+      - name: Print Inputs (debug)
+        run: |
+          echo "Results Repo: $RESULTS_REPO"
+          echo "Results Dir: $RESULTS_DIR"          
+
       - name: Download recon-results artifact
         uses: actions/download-artifact@v4
         with:
