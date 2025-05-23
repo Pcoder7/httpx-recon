@@ -67,7 +67,7 @@ jobs:
           mapfile -t domains < <(
             find results -mindepth 1 -maxdepth 1 -type d \
               -exec test -f "{}/all_resolved.txt" \; -print \
-            | sed -e 's|results/recon-results-||'
+            | sed -e 's|results/||'
           )
       
           # 2. If no domains are found, emit an empty matrix
