@@ -42,11 +42,14 @@ jobs:
           echo "Results Repo: $RESULTS_REPO"
           echo "Results Dir: $RESULTS_DIR"          
 
-      - name: Download recon-results artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ github.event.inputs.artifact_name }}       
-          path: results
+      - name: Download recon-results artifact from upstream repo
+        env:
+          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
+        run: |
+          gh run download \
+            --repo "${{ env.RESULTS_REPO }}" \
+            --name "${{ github.event.inputs.artifact_name }}" \
+            --dir results     
           
       - name: Build domain matrix from results/*/all_resolved.txt
         id: set_matrix
