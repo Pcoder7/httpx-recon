@@ -21,13 +21,12 @@ env:
   RESULTS_DIR: ${{ github.event.inputs.results_dir }}
   LINES_PER_CHUNK: 100     # <— maximum lines per file
   MAX_PARALLEL: 10         # <— throttle HTTPX jobs
-  
 
 
 jobs:
   prepare_matrix:
     runs-on: ubuntu-latest
-    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+   
     outputs:
       matrix: ${{ steps.set_matrix.outputs.matrix }}
       unique_domains: ${{ steps.set_matrix.outputs.unique_domains }}
