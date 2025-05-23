@@ -46,7 +46,7 @@ jobs:
           gh run download \
             --repo "${{ env.RESULTS_REPO }}" \
             --name "${{ github.event.inputs.artifact_name }}" \
-            --dir results    
+            --dir .    
        
       - name: Debug list downloaded files
         run: ls -R .
