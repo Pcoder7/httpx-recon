@@ -39,7 +39,9 @@ jobs:
           echo "Results Repo: $RESULTS_REPO"
           echo "Artifact Name: ${{ github.event.inputs.artifact_name }}"
        
-
+      - name: Clean slate
+        run: rm -rf results
+        
       - name: Download recon-results artifact from upstream repo
         env:
           GH_TOKEN: ${{ secrets.PAT_TOKEN }}
@@ -48,7 +50,7 @@ jobs:
           gh run download \
             --repo "${{ env.RESULTS_REPO }}" \
             --name "${{ github.event.inputs.artifact_name }}" \
-            --dir results    
+            --dir .    
 
           echo "Download complete. Checking contents of workspace and results directory:"
           pwd
