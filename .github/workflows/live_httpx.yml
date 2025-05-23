@@ -51,11 +51,11 @@ jobs:
             --name "${{ github.event.inputs.artifact_name }}" \
             --dir .     
        
-       - name: Debug list downloaded files
-         run: ls -R results
-      #- name: Flatten recon-results artifact structure
-       # run: |
-        #  ART="${{ github.event.inputs.artifact_name }}"
+      - name: Debug list downloaded files
+        run: ls -R results
+        #- name: Flatten recon-results artifact structure
+         # run: |
+         #  ART="${{ github.event.inputs.artifact_name }}"
          # # Move the inner results/<domain> dirs up into results/
           #mv "results/${ART}/results"/* results/
           # Clean up the now-empty artifact wrapper
