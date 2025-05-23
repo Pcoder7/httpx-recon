@@ -1,0 +1,13 @@
+http://customweb1.apsis.com
+http://d7.apsis.com
+http://tr.pro-test.apsis.com
+https://apsis.com
+https://customers.apsis.com
+https://developer.apsis.com
+https://files.apsis.com
+https://help.apsis.com
+https://jobs.apsis.com
+https://knowledge.apsis.com
+https://soc-files.apsis.com
+https://www.apsis.com
+https://xml.apsis.com
