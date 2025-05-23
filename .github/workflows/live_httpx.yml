@@ -9,16 +9,13 @@ on:
       artifact_name:
         type: string
         required: true
-      results_dir:
-        type: string
-        required: true
 
 permissions:
   contents: write
 
 env:
   RESULTS_REPO: ${{ github.event.inputs.results_repo }}
-  RESULTS_DIR: ${{ github.event.inputs.results_dir }}
+
   LINES_PER_CHUNK: 100     # <— maximum lines per file
   MAX_PARALLEL: 10         # <— throttle HTTPX jobs
 
@@ -40,7 +37,7 @@ jobs:
       - name: Print Inputs (debug)
         run: |
           echo "Results Repo: $RESULTS_REPO"
-          echo "Results Dir: $RESULTS_DIR"          
+       
 
       - name: Download recon-results artifact from upstream repo
         env:
@@ -49,10 +46,11 @@ jobs:
           gh run download \
             --repo "${{ env.RESULTS_REPO }}" \
             --name "${{ github.event.inputs.artifact_name }}" \
-            --dir results     
+            --dir .    
        
       - name: Debug list downloaded files
         run: ls -R results
+        
         #- name: Flatten recon-results artifact structure
          # run: |
          #  ART="${{ github.event.inputs.artifact_name }}"
