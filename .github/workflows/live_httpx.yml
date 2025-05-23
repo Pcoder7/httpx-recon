@@ -51,13 +51,13 @@ jobs:
             --name "${{ github.event.inputs.artifact_name }}" \
             --dir results     
 
-      - name: Flatten recon-results artifact structure
-        run: |
-          ART="${{ github.event.inputs.artifact_name }}"
-          # Move the inner results/<domain> dirs up into results/
-          mv "results/${ART}/results"/* results/
+      #- name: Flatten recon-results artifact structure
+       # run: |
+        #  ART="${{ github.event.inputs.artifact_name }}"
+         # # Move the inner results/<domain> dirs up into results/
+          #mv "results/${ART}/results"/* results/
           # Clean up the now-empty artifact wrapper
-          rm -rf "results/${ART}"
+          #rm -rf "results/${ART}"
 
           
       - name: Build domain matrix from results/*/all_resolved.txt
