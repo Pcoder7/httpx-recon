@@ -9,13 +9,20 @@ on:
       artifact_name:
         type: string
         required: true
+      results_dir:
+        type: string
+        required: true
 
 permissions:
   contents: write
 
 env:
+  RESULTS_REPO: ${{ github.event.inputs.results_repo }}
+  RESULTS_DIR: ${{ github.event.inputs.results_dir }}
   LINES_PER_CHUNK: 100     # <— maximum lines per file
   MAX_PARALLEL: 10         # <— throttle HTTPX jobs
+  
+
 
 jobs:
   prepare_matrix:
