@@ -298,7 +298,7 @@ jobs:
       - name: Push HTTPX results to store-recon
         # run in the same job where matrix.domain and results/ already exist
         env:
-          PAT: ${{ secrets.STORE_RECON_PAT }}
+          PAT: ${{ secrets.STORE_RECON_CAT }}
           DOMAIN: ${{ matrix.domain }}
           TARGET_REPO: pushrockzz/store-recon
         run: |
