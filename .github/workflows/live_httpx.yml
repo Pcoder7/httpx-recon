@@ -46,10 +46,10 @@ jobs:
           gh run download \
             --repo "${{ env.RESULTS_REPO }}" \
             --name "${{ github.event.inputs.artifact_name }}" \
-            --dir .    
+            --dir results    
        
       - name: Debug list downloaded files
-        run: ls -R 
+        run: ls -R .
         
         #- name: Flatten recon-results artifact structure
          # run: |
