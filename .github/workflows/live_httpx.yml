@@ -8,7 +8,7 @@ permissions:
 
 env:
   LINES_PER_CHUNK: 100     # <— maximum lines per file
-  MAX_PARALLEL: 5         # <— throttle HTTPX jobs
+  MAX_PARALLEL: 20         # <— throttle HTTPX jobs
 
 jobs:
   prepare_matrix:
@@ -42,22 +42,26 @@ jobs:
       
             for d in "${domains[@]}"; do
               SRC="results/$d/all_resolved.txt"
+
+              # ← step A: get the total line count
+              LINES=$(wc -l < "$SRC")
+              echo "Source $SRC has $LINES lines"
       
               # 3. Create per-domain chunk dir & split into 100-line files
               CHUNK_DIR="results/$d/chunks"
               mkdir -p "$CHUNK_DIR"
 
               if [ "$LINES" -gt 2000 ]; then
-                echo "Source has $LINES lines → splitting into 20 files"
+                echo "Source has $LINES lines → splitting into 20 equal chunks"
                 split -n l/20 \
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
               else
-                echo "Source has $LINES lines → splitting into 200-line files"
+                echo "Source has $LINES lines → splitting into 200-line chunks"
                 split -l 200 \
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
-              fi                    
+              fi                   
       
               # 4. Debug: list out what we just created
               echo "Contents of $CHUNK_DIR:"
