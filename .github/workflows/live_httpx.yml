@@ -180,7 +180,7 @@ jobs:
           
           if [ "$LINES" -ge 50000 ]; then
             echo "— Splitting into 10 chunks for heavy lift..."
-            split -n l/10 \
+            split -n l/20 \
                   --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                   "$CH" "$TMP_DIR/sub_"
       
@@ -200,17 +200,17 @@ jobs:
       
           elif [ "$LINES" -ge 1000 ]; then
             echo "— Splitting into 2 chunks for light lift..."
-            split -n l/2 \
+            split -n l/5 \
                   --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                   "$CH" "$TMP_DIR/sub_"
       
-            parallel -j2 \
-              'httpx -l {} -silent -no-color -threads 70 -retries 1 -random-agent -timeout 10 \
+            parallel -j5 \
+              'httpx -l {} -silent -no-color -threads 100 -retries 1 -random-agent -timeout 10 \
                -o '"$OUT"'/httpx_{/.}.txt' ::: "$TMP_DIR"/sub_*
       
           else
             echo "— Small file; single httpx run..."
-            httpx -l "$CH" -silent -threads 50 -retries 1 -random-agent -timeout 10 \
+            httpx -l "$CH" -silent -threads 70 -retries 1 -random-agent -timeout 10 \
                   -o "${OUT}/httpx_$(basename "$CH").txt"
           fi
 
@@ -248,7 +248,7 @@ jobs:
   aggregate_results:
 
     concurrency:
-      group: aggregate-results
+      group: aggregate-results-${{ matrix.domain }}
       cancel-in-progress: false
     needs: [prepare_matrix, httpx]
     runs-on: ubuntu-latest
