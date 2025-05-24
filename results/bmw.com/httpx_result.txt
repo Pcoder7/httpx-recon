@@ -221,13 +221,14 @@ http://stats.bmw.de
 http://strolche-n.bmw.de
 http://umfrage-old.bmw.de
 http://www.aktion.heritage.bmw-motorrad.de
-http://www.bmw.de
+http://www.bmw-motorrad.de
 http://www.configurator.bmw.de
 http://www.dealername.bmw.de
 http://www.int-umfrage.bmw.de
 http://www.jawa-mobil.bmw.de
 http://www.jawamobil.bmw.de
 http://www.motorradhaus-ebert.bmw-motorrad.de
+http://www.motorradmitte.bmw-motorrad.de
 http://www.partner.gebrauchtwagen.bmw.de
 https://ahg-gmbh.bmw-motorrad.de
 https://aktion.bmw.de
