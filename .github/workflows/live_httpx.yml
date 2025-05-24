@@ -2,82 +2,25 @@ name: Parallel HTTPX Probe
 
 on:
   workflow_dispatch:
-    inputs:
-      results_repo:
-        type: string
-        required: true
-      artifact_name:
-        type: string
-        required: true
 
 permissions:
   contents: write
 
 env:
-  RESULTS_REPO: ${{ github.event.inputs.results_repo }}
-
   LINES_PER_CHUNK: 100     # <— maximum lines per file
-  MAX_PARALLEL: 10         # <— throttle HTTPX jobs
-
+  MAX_PARALLEL: 5         # <— throttle HTTPX jobs
 
 jobs:
   prepare_matrix:
     runs-on: ubuntu-latest
-   
     outputs:
       matrix: ${{ steps.set_matrix.outputs.matrix }}
       unique_domains: ${{ steps.set_matrix.outputs.unique_domains }}
-     
     steps:
-      - name: Checkout Repository      
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
         with: 
           fetch-depth: 0 
 
-      - name: Print Inputs (debug)
-        run: |
-          echo "Results Repo: $RESULTS_REPO"
-          echo "Artifact Name: ${{ github.event.inputs.artifact_name }}"
-       
-      - name: Clean slate
-        run: rm -rf results
-        
-      - name: Download recon-results artifact from upstream repo
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}
-        run: |
-          echo "Attempting to download artifact: ${{ github.event.inputs.artifact_name }} from repo: ${{ env.RESULTS_REPO }}"         
-          gh run download \
-            --repo "${{ env.RESULTS_REPO }}" \
-            --name "${{ github.event.inputs.artifact_name }}" \
-            --dir .    
-
-          echo "Download complete. Checking contents of workspace and results directory:"
-          pwd
-          ls -lA
-          echo "--- Contents of results directory ---"
-          ls -R results
-       
-      - name: Debug list downloaded files and structure
-        run: |
-          echo "Current directory structure:"
-          ls -R .
-          echo "Specifically, contents of ./results:"
-          if [ -d "results" ]; then
-            ls -R results
-          else
-            echo "./results directory does not exist."
-          fi
-        
-        #- name: Flatten recon-results artifact structure
-         # run: |
-         #  ART="${{ github.event.inputs.artifact_name }}"
-         # # Move the inner results/<domain> dirs up into results/
-          #mv "results/${ART}/results"/* results/
-          # Clean up the now-empty artifact wrapper
-          #rm -rf "results/${ART}"
-
-          
       - name: Build domain matrix from results/*/all_resolved.txt
         id: set_matrix
         run: |
@@ -85,7 +28,7 @@ jobs:
           mapfile -t domains < <(
             find results -mindepth 1 -maxdepth 1 -type d \
               -exec test -f "{}/all_resolved.txt" \; -print \
-            | sed -e 's|results/||'
+            | sed 's|results/||'
           )
       
           # 2. If no domains are found, emit an empty matrix
@@ -103,9 +46,18 @@ jobs:
               # 3. Create per-domain chunk dir & split into 100-line files
               CHUNK_DIR="results/$d/chunks"
               mkdir -p "$CHUNK_DIR"
-              split -l 100 --numeric-suffixes=1 --suffix-length=2 \
-                    --additional-suffix=.txt \
-                    "$SRC" "$CHUNK_DIR/chunk_"
+
+              if [ "$LINES" -gt 2000 ]; then
+                echo "Source has $LINES lines → splitting into 20 files"
+                split -n l/20 \
+                      --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
+                      "$SRC" "$CHUNK_DIR/chunk_"
+              else
+                echo "Source has $LINES lines → splitting into 200-line files"
+                split -l 200 \
+                      --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
+                      "$SRC" "$CHUNK_DIR/chunk_"
+              fi                    
       
               # 4. Debug: list out what we just created
               echo "Contents of $CHUNK_DIR:"
@@ -137,8 +89,6 @@ jobs:
         with:
           name: httpx-chunks
           path: results/*/chunks/**
-          retention-days: 1
-          
   
   httpx:
     needs: prepare_matrix
@@ -147,7 +97,7 @@ jobs:
     strategy:
       matrix:
         pair: ${{ fromJson(needs.prepare_matrix.outputs.matrix) }}
-      max-parallel: 10
+      max-parallel: 5
 
     steps:
     
@@ -170,9 +120,7 @@ jobs:
           key: go-cache-${{ github.ref_name }} 
           restore-keys: |
             go-cache-
-
-
-
+      
       - name: Ensure httpx & anew are installed
         run: |
          
@@ -191,11 +139,8 @@ jobs:
           else
             echo "anew already cached"
           fi
-          echo "ls -R . show"
-          ls -R .
-          echo "\n\n\n ----"
-
-
+          ls -R "results"
+      
       - name: Download chunk files
         uses: actions/download-artifact@v4
         with: 
@@ -216,10 +161,59 @@ jobs:
           OUT="results/${D}/httpx_out"
           mkdir -p "$OUT"
 
-          echo "▶ Probing chunk: $CH"
-          httpx -l "$CH" -silent -threads 50 \
-            -o "${OUT}/httpx_$(basename "$CH").txt"
       
+          LINES=$(wc -l < "$CH")
+          echo "▶ File: $CH — Lines: $LINES"
+      
+          # prepare a temp dir for splits
+          TMP_DIR=$(mktemp -d)
+          
+          if [ "$LINES" -ge 50000 ]; then
+            echo "— Splitting into 10 chunks for heavy lift..."
+            split -n l/10 \
+                  --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
+                  "$CH" "$TMP_DIR/sub_"
+      
+            parallel -j10 \
+              'httpx -l {} -silent -no-color -threads 100 \
+               -o '"$OUT"'/httpx_{/.}.txt' ::: "$TMP_DIR"/sub_*
+      
+          elif [ "$LINES" -ge 5000 ]; then
+            echo "— Splitting into 5 chunks for medium lift..."
+            split -n l/5 \
+                  --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
+                  "$CH" "$TMP_DIR/sub_"
+      
+            parallel -j5 \
+              'httpx -l {} -silent -no-color -threads 100 \
+               -o '"$OUT"'/httpx_{/.}.txt' ::: "$TMP_DIR"/sub_*
+      
+          elif [ "$LINES" -ge 1000 ]; then
+            echo "— Splitting into 2 chunks for light lift..."
+            split -n l/2 \
+                  --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
+                  "$CH" "$TMP_DIR/sub_"
+      
+            parallel -j2 \
+              'httpx -l {} -silent -no-color -threads 100 \
+               -o '"$OUT"'/httpx_{/.}.txt' ::: "$TMP_DIR"/sub_*
+      
+          else
+            echo "— Small file; single httpx run..."
+            httpx -l "$CH" -silent -threads 50 \
+                  -o "${OUT}/httpx_$(basename "$CH").txt"
+          fi
+
+          # — now RECOMBINE all sub-results into one per original chunk:
+
+          find "$OUT" -type f -name 'httpx_*.txt' -print0 \
+            | xargs -0 cat \
+            | sort -u > "$OUT/httpx_$(basename "$CH")"
+          
+          # remove the intermediate files (optional but tidy):
+
+          rm -rf "$TMP_DIR" "$OUT"/httpx_sub_*.txt
+            
       - name: Compute per-chunk artifact name
         id: art
         run: |
@@ -228,7 +222,6 @@ jobs:
           # this writes an output called 'artifact_name'
           echo "artifact_name=httpx-${D}-${CHN}" >> $GITHUB_OUTPUT
           ANAME="httpx-${D}-${CHN}"
-
            # debug output so you can see it in the log
           echo ">> DEBUG: artifact_name is '$ANAME'"
             
@@ -240,7 +233,6 @@ jobs:
         with:
           name: ${{ env.ART_NAME }}
           path: results/${{ matrix.pair.domain }}/httpx_out/*.txt
-          retention-days: 1
 
 
   aggregate_results:
@@ -263,7 +255,6 @@ jobs:
           key: go-cache-${{ github.ref_name }}
           restore-keys: |
             go-cache-
-
       - name: Setup Go (for go install)
         uses: actions/setup-go@v5
         with:
@@ -277,7 +268,6 @@ jobs:
           else
             echo "anew already cached"
           fi          
-
       - name: Download all httpx artifacts
         uses: actions/download-artifact@v4
         with:
@@ -291,72 +281,33 @@ jobs:
           ls -A results
                             
           # cat only this domain’s httpx files
-             # show how many lines we actually have across all the chunk files:
+          # show how many lines we actually have across all the chunk files:
+
           echo "Total lines across chunks:"
           find results -type f -path "*/httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | tee >(wc -l)
           
-           # now dedupe into one file
+          # now dedupe into one file
+          
           echo "deduping files"
           find results -type f -path "*/httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | sort -u > results/"$D"/httpx_result.txt
           wc -l results/"$D"/httpx_result.txt
 
-      - name: Push HTTPX results to store-recon
-        # run in the same job where matrix.domain and results/ already exist
-        env:
-          PAT: ${{ secrets.STORE_RECON_CAT }}
-          DOMAIN: ${{ matrix.domain }}
-          TARGET_REPO: pushrockzz/store-recon
+
+      - name: Commit & push HTTPX result for ${{ matrix.domain }}
         run: |
-          set -e
-
-          # 1) Configure Git
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "actions@github.com"
-
-          # 2) Clone store-recon (shallow)
-          git clone https://x-access-token:${PAT}@github.com/${TARGET_REPO}.git \
-            --depth 1 store-recon
-          cd store-recon
-
-          # 3) Copy over your results folder
-          mkdir -p results/${DOMAIN}
-          cp -r ../results/${DOMAIN}/* results/${DOMAIN}/
-
-          # 4) Commit if there are changes
-          git add results/${DOMAIN}
-          if git diff --cached --quiet; then
-            echo "No changes to commit for ${DOMAIN}"
-            exit 0
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+          TARGET="results/${{ matrix.domain }}/httpx_result.txt"
+      
+          git add "$TARGET"
+          git diff --cached --quiet || git commit -m "HTTPX result for ${{ matrix.domain }}"
+      
+          # Try a rebase for a linear history
+          if ! git pull --rebase --autostash origin main; then
+            echo "⚠️ Rebase failed (delete/modify conflict) — aborting and merging instead"
+            git rebase --abort
+            git pull origin main
           fi
-          git commit -m "Add HTTPX results for ${DOMAIN}"
-
-          # 5) Push with retry to handle rare race conditions
-          ATTEMPTS=0
-          MAX=5
-          until [ $ATTEMPTS -ge $MAX ]; do
-            git pull --rebase origin main && \
-            git push origin HEAD:main && break
-            ATTEMPTS=$((ATTEMPTS+1))
-            echo "Push failed, retry $ATTEMPTS/$MAX..."
-            sleep $((2 ** ATTEMPTS))
-            git fetch origin main
-          done
-          if [ $ATTEMPTS -ge $MAX ]; then
-            echo "❌ Failed to push after $MAX attempts"
-            exit 1
-          fi
-
-      - name: Delete uploaded HTTPX chunk artifacts
-        env:
-          GH_TOKEN: ${{ secrets.PAT_TOKEN }}   # or your PAT if needed
-        run: |
-          # 1. List all artifacts in this repo
-          ARTIFACTS_ID=$(gh api /repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/artifacts \
-            --jq '.artifacts[] | select(.name|startswith("httpx-")) | .id')
-          
-          # 2. Delete each one
-          for ID in $ARTIFACTS_ID; do
-            echo "Deleting artifact ID $ID"
-            gh api --method DELETE /repos/${{ github.repository }}/actions/artifacts/$ID
-          done
-          
+      
+          # Finally, push whatever we have (rebased or merged)
+          git push origin HEAD:main
