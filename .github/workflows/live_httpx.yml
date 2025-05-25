@@ -7,7 +7,7 @@ permissions:
   contents: write
 
 env:
-  LINES_PER_CHUNK: 100     # <— maximum lines per file
+  
   MAX_PARALLEL: 20         # <— throttle HTTPX jobs
 
 jobs:
@@ -43,6 +43,9 @@ jobs:
             for d in "${domains[@]}"; do
               SRC="results/$d/all_resolved.txt"
 
+              # skip if file somehow missing  
+              [ -f "$SRC" ] || continue
+              
               # ← step A: get the total line count
               LINES=$(wc -l < "$SRC")
               echo "Source $SRC has $LINES lines"
@@ -50,18 +53,22 @@ jobs:
               # 3. Create per-domain chunk dir & split into 100-line files
               CHUNK_DIR="results/$d/chunks"
               mkdir -p "$CHUNK_DIR"
-
-              if [ "$LINES" -gt 2000 ]; then
-                echo "Source has $LINES lines → splitting into 20 equal chunks"
+              if [ "$LINES" -ge 500000 ]; then
+                echo "— ≥500 000 lines: splitting into 50 equal chunks"
+                split -n l/50 \
+                      --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
+                      "$SRC" "$CHUNK_DIR/chunk_"
+              elif [ "$LINES" -gt 2000 ]; then
+                echo "— >2000 lines: splitting into 20 equal chunks"
                 split -n l/20 \
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
               else
-                echo "Source has $LINES lines → splitting into 200-line chunks"
+                echo "— ≤2000 lines: splitting into 200-line chunks"
                 split -l 200 \
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
-              fi                   
+              fi          
       
               # 4. Debug: list out what we just created
               echo "Contents of $CHUNK_DIR:"
@@ -170,59 +177,57 @@ jobs:
           CH="${{ matrix.pair.chunk }}"
           OUT="results/${D}/httpx_out"
           mkdir -p "$OUT"
-
       
           LINES=$(wc -l < "$CH")
-          echo "▶ File: $CH — Lines: $LINES"
-      
-          # prepare a temp dir for splits
-          TMP_DIR=$(mktemp -d)
-          
-          if [ "$LINES" -ge 50000 ]; then
-            echo "— Splitting into 10 chunks for heavy lift..."
-            split -n l/20 \
-                  --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
-                  "$CH" "$TMP_DIR/sub_"
-      
-            parallel -j10 \
-              'httpx -l {} -silent -no-color -threads 200 -retries 3 -random-agent -timeout 15 \
-               -o '"$OUT"'/httpx_{/.}.txt' ::: "$TMP_DIR"/sub_*
-      
-          elif [ "$LINES" -ge 10000 ]; then
-            echo "— Splitting into 5 chunks for medium lift..."
-            split -n l/5 \
-                  --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
-                  "$CH" "$TMP_DIR/sub_"
-      
-            parallel -j5 \
-              'httpx -l {} -silent -no-color -threads 100 -retries 2 -random-agent -timeout 10 \
-               -o '"$OUT"'/httpx_{/.}.txt' ::: "$TMP_DIR"/sub_*
-      
-          elif [ "$LINES" -ge 1000 ]; then
-            echo "— Splitting into 2 chunks for light lift..."
-            split -n l/5 \
-                  --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
-                  "$CH" "$TMP_DIR/sub_"
-      
-            parallel -j5 \
-              'httpx -l {} -silent -no-color -threads 100 -retries 1 -random-agent -timeout 10 \
-               -o '"$OUT"'/httpx_{/.}.txt' ::: "$TMP_DIR"/sub_*
-      
+          echo "▶ Processing $CH — $LINES lines"
+
+          if [ "$LINES" -le 2000 ]; then
+            # small: single httpx run
+            echo "— ≤2000 lines: single httpx with 100 threads"
+            httpx -l "$CH" -silent -threads 100 \
+              -o "${OUT}/httpx_$(basename "$CH").txt"
+
           else
-            echo "— Small file; single httpx run..."
-            httpx -l "$CH" -silent -threads 70 -retries 1 -random-agent -timeout 10 \
-                  -o "${OUT}/httpx_$(basename "$CH").txt"
+            # big: split into 2000-line sub-files
+            TMP=$(mktemp -d)
+            # suffix-length=2 covers up to 99 subchunks (we’ll have ≤30)
+            split -l 2000 --numeric-suffixes=1 --suffix-length=2 \
+                  --additional-suffix=.txt \
+                  "$CH" "$TMP/sub_"
+
+            # decide parallelism & threads based on original chunk size
+            if [ "$LINES" -gt 50000 ]; then
+              JOBS=20; THREADS=250
+            elif [ "$LINES" -gt 30000 ]; then
+              JOBS=15; THREADS=200
+            else
+              # 2000 < LINES ≤ 30000 → split count up to ceil(LINES/2000), cap at 10
+              SUBCOUNT=$(( (LINES + 2000 - 1) / 2000 ))
+              if [ "$SUBCOUNT" -lt 10 ]; then
+                JOBS=$SUBCOUNT
+              else
+                JOBS=10
+              fi
+              THREADS=100
+            fi
+
+            echo "— Launching parallel -j$JOBS with $THREADS threads"
+            parallel -j"$JOBS" \
+              httpx -l {} -silent -threads "$THREADS" -retries 1 -random-agent -timeout 10 \
+                    -o "$OUT/httpx_{/.}.txt" \
+              ::: "$TMP"/sub_*.txt
+
+            # cleanup temp sub-chunks
+            rm -rf "$TMP"
           fi
+
 
           # — now RECOMBINE all sub-results into one per original chunk:
 
           find "$OUT" -type f -name 'httpx_*.txt' -print0 \
             | xargs -0 cat \
-            | sort -u > "$OUT/httpx_$(basename "$CH")"
+            | sort -u > "${OUT}/httpx_$(basename "$CH").txt"
           
-          # remove the intermediate files (optional but tidy):
-
-          rm -rf "$TMP_DIR" "$OUT"/httpx_sub_*.txt
             
       - name: Compute per-chunk artifact name
         id: art
