@@ -197,16 +197,16 @@ jobs:
 
             # decide parallelism & threads based on original chunk size
             if [ "$LINES" -gt 35000 ]; then
-              JOBS=20; THREADS=250
+              JOBS=15; THREADS=250
             elif [ "$LINES" -gt 15000 ]; then
-              JOBS=15; THREADS=200
+              JOBS=12; THREADS=200
             else
               # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
               SUBCOUNT=$(( (LINES + 1500 - 1) / 1500 ))
               if [ "$SUBCOUNT" -lt 10 ]; then
                 JOBS=$SUBCOUNT
               else
-                JOBS=10
+                JOBS=8
               fi
               THREADS=100
             fi
