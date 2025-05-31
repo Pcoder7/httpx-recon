@@ -485,7 +485,7 @@ jobs:
             exit 1
           fi
 
-delete_artifacts:
+  delete_artifacts:
     name: Delete Workflow Artifacts
     needs: commit_to_external_repo # Ensure this runs after the commit job
     runs-on: ubuntu-latest
