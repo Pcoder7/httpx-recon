@@ -312,21 +312,3 @@ jobs:
           wc -l results/"$D"/httpx_result.txt
 
 
-      - name: Commit & push HTTPX result for ${{ matrix.domain }}
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "actions@github.com"
-          TARGET="results/${{ matrix.domain }}/httpx_result.txt"
-      
-          git add "$TARGET"
-          git diff --cached --quiet || git commit -m "HTTPX result for ${{ matrix.domain }}"
-      
-          # Try a rebase for a linear history
-          if ! git pull --rebase --autostash origin main; then
-            echo "⚠️ Rebase failed (delete/modify conflict) — aborting and merging instead"
-            git rebase --abort
-            git pull origin main
-          fi
-      
-          # Finally, push whatever we have (rebased or merged)
-          git push origin HEAD:main
