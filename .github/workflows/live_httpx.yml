@@ -296,20 +296,49 @@ jobs:
         run: |
           D="${{ matrix.domain }}"
           # make sure domain dir exists (matches chunks and recon)
-          mkdir -p results/"$D"/httpx_out
-          ls -A results
+          mkdir -p "results/$D" 
+          
+          echo "Listing contents of 'results' directory after download (artifacts are in subdirs):"
+          ls -AlR results # More detailed listing for debugging
                             
-          # cat only this domain’s httpx files
-          # show how many lines we actually have across all the chunk files:
+          AGGREGATED_CONTENT_TMP=$(mktemp)
+          FINAL_RESULT_FILE="results/$D/httpx_result.txt"
 
-          echo "Total lines across chunks:"
-          find results -type f -path "*/httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | tee >(wc -l)
+          echo "Searching for chunk files for domain $D..."
+          echo "Looking in directories matching 'results/httpx-${D}-chunk_*.txt/' for files named 'httpx_chunk_*.txt'"
           
-          # now dedupe into one file
+          # Corrected find: searches within artifact directories (e.g., results/httpx-mydomain-chunk_01.txt/)
+          # for the actual result files (e.g., httpx_chunk_01.txt).
+          # xargs --no-run-if-empty handles cases where find returns no files.
+          # The 2>/dev/null on find suppresses errors if a glob pattern doesn't match any directories.
+          find results/httpx-${D}-chunk_*.txt/ -type f -name "httpx_chunk_*.txt" -print0 2>/dev/null | xargs -0 --no-run-if-empty cat > "$AGGREGATED_CONTENT_TMP"
           
-          echo "deduping files"
-          find results -type f -path "*/httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | sort -u > results/"$D"/httpx_result.txt
-          wc -l results/"$D"/httpx_result.txt
+          if [ ! -s "$AGGREGATED_CONTENT_TMP" ]; then
+            echo "::warning::No content found to aggregate for domain $D from chunk files. '$FINAL_RESULT_FILE' will be empty."
+            # Create an empty file if no content was found, so upload-artifact doesn't fail on missing path
+            # and downstream steps know this domain had no results.
+            >"$FINAL_RESULT_FILE"
+          else
+            echo "Total lines across chunks for $D (before deduplication):"
+            wc -l < "$AGGREGATED_CONTENT_TMP"
+            
+            echo "Deduplicating content for $D into $FINAL_RESULT_FILE"
+            sort -u < "$AGGREGATED_CONTENT_TMP" > "$FINAL_RESULT_FILE"
+          fi
+          
+          rm -f "$AGGREGATED_CONTENT_TMP"
+          
+          echo "Final aggregated file for $D:"
+          ls -l "$FINAL_RESULT_FILE"
+          echo "Line count in final aggregated file for $D:"
+          wc -l < "$FINAL_RESULT_FILE"
+
+      - name: Upload aggregated result for ${{ matrix.domain }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: aggregated-result-${{ matrix.domain }} # This matches the pattern expected by the commit job
+          path: results/${{ matrix.domain }}/httpx_result.txt
+          if-no-files-found: error # Or 'warn' if an empty/missing result file is acceptable sometimes          
   
   commit_to_external_repo:
     name: Commit Domain-Specific Results to External Repo
@@ -456,3 +485,25 @@ jobs:
             exit 1
           fi
 
+delete_artifacts:
+    name: Delete Workflow Artifacts
+    needs: commit_to_external_repo # Ensure this runs after the commit job
+    runs-on: ubuntu-latest
+    # 'if: always()' ensures this job runs even if 'commit_to_external_repo' fails,
+    # which is generally good for cleanup.
+    # If you only want to delete artifacts on successful commit, use 'if: success()'
+    if: always()
+    permissions:
+      actions: write # Required to delete artifacts
+    steps:
+      - name: Delete all workflow run artifacts
+        uses: geekyeggo/delete-artifact@v2 # Using v2 as v4 for delete-artifact doesn't exist and v2 is commonly used
+        with:
+          # If 'name' is not specified, it defaults to deleting all artifacts for the run.
+          # For explicit clarity, you could use:
+          # name: |  # A multi-line string to list patterns or names, but we want all
+          #  httpx-chunks
+          #  httpx-*
+          #  aggregated-result-*
+          # However, omitting 'name' is simpler for "all artifacts".
+          failOnError: false # Set to true if you want the workflow to fail if artifact deletion fails
