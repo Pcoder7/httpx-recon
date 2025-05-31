@@ -310,5 +310,149 @@ jobs:
           echo "deduping files"
           find results -type f -path "*/httpx-${D}-chunk_*.txt" -print0 | xargs -0 cat | sort -u > results/"$D"/httpx_result.txt
           wc -l results/"$D"/httpx_result.txt
+  
+  commit_to_external_repo:
+    name: Commit Domain-Specific Results to External Repo
+    needs: aggregate_results # Runs after all domain aggregations are complete
+    runs-on: ubuntu-latest
+    # Only run if previous stages were successful and there was data to process
+    if: ${{ success() && needs.prepare_matrix.outputs.matrix != '[]' }}
+    steps:
+      - name: Download all aggregated domain results
+        uses: actions/download-artifact@v4
+        with:
+          path: temp_aggregated_results # All artifacts will be downloaded here
+          # Pattern to download all artifacts starting with "aggregated-result-"
+          pattern: aggregated-result-*
+          # 'merge-multiple: false' (default) is appropriate here, as each artifact is distinct.
 
+      - name: List downloaded artifacts structure for debugging
+        run: ls -R temp_aggregated_results
+
+      - name: Checkout external repository (store-recon)
+        uses: actions/checkout@v3
+        with:
+          repository: YOUR_OTHER_ACCOUNT_USERNAME/store-recon # IMPORTANT: Replace with actual username/org
+          token: ${{ secrets.STORE_RECON_PAT }} # PAT with 'repo' scope for store-recon
+          path: store-recon-checkout # Checkout into a specific subdirectory
+          ref: main # Or your target branch in store-recon
+
+      - name: Process and Push Each Domain's Results Individually
+        working-directory: ./store-recon-checkout # Run git commands in the checkout directory
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          SOURCE_DOWNLOAD_DIR="../temp_aggregated_results" # Relative to store-recon-checkout
+          OVERALL_SUCCESS=true
+          TARGET_BRANCH="main" # Or your target branch in store-recon, should match checkout 'ref'
+
+          shopt -s nullglob # Prevent loop from running if no matches
+          for artifact_folder in ${SOURCE_DOWNLOAD_DIR}/aggregated-result-*; do
+            domain_name_from_artifact=$(basename "$artifact_folder" | sed 's/aggregated-result-//')
+            # The source file is named httpx_result.txt within its artifact folder
+            source_file_path="${artifact_folder}/httpx_result.txt"
+
+            echo "--- Processing domain: ${domain_name_from_artifact} ---"
+
+            # 1. PULL LATEST from store-recon target branch before processing this domain
+            echo "Pulling latest changes from store-recon/${TARGET_BRANCH} for ${domain_name_from_artifact}..."
+            PULL_RETRY_COUNT=3
+            PULL_RETRY_DELAY_SECONDS=10
+            DOMAIN_PULL_SUCCESS=false
+            for i_pull in $(seq 1 $PULL_RETRY_COUNT); do
+              if [ -d ".git/rebase-apply" ] || [ -d ".git/rebase-merge" ]; then
+                 echo "Aborting previous rebase before pull attempt ${i_pull}..."
+                 git rebase --abort || true 
+              fi
+              if git pull --rebase --autostash origin ${TARGET_BRANCH}; then
+                echo "Successfully pulled latest changes from store-recon/${TARGET_BRANCH} for ${domain_name_from_artifact}."
+                DOMAIN_PULL_SUCCESS=true
+                break
+              fi
+              if [ $i_pull -lt $PULL_RETRY_COUNT ]; then
+                echo "Pull attempt $i_pull for ${domain_name_from_artifact} failed. Retrying in $PULL_RETRY_DELAY_SECONDS seconds..."
+                sleep $PULL_RETRY_DELAY_SECONDS
+              else
+                echo "::error::Failed to pull from store-recon/${TARGET_BRANCH} for ${domain_name_from_artifact} after $PULL_RETRY_COUNT attempts. Skipping this domain."
+                OVERALL_SUCCESS=false
+                break 
+              fi
+            done
+
+            if [ "$DOMAIN_PULL_SUCCESS" = false ]; then
+              continue 
+            fi
+
+            # 2. COPY the specific domain file to the desired structure
+            if [ -f "$source_file_path" ]; then
+              # This defines the target directory: results/<domain_name>/
+              target_domain_dir="results/${domain_name_from_artifact}"
+              # This defines the target file name: results/<domain_name>/httpx_result.txt
+              target_file_path="${target_domain_dir}/httpx_result.txt"
+
+              mkdir -p "$target_domain_dir" # Ensure the directory structure results/<domain_name>/ exists
+              cp "$source_file_path" "$target_file_path" # Copy the file
+              
+              # 3. ADD & COMMIT that specific domain file at its new location
+              git add "$target_file_path" # Add results/<domain_name>/httpx_result.txt
+              if ! git diff --staged --quiet; then
+                COMMIT_MSG="Update HTTPX results for ${domain_name_from_artifact}"
+                COMMIT_BODY="Workflow Run ID: ${{ github.run_id }}
+                Workflow: ${{ github.workflow }}
+                Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                git commit -m "${COMMIT_MSG}" -m "${COMMIT_BODY}"
+                echo "Committed changes for ${domain_name_from_artifact} (path: ${target_file_path})"
+
+                # 4. PUSH this domain's commit(s) (with retry)
+                echo "Pushing changes for ${domain_name_from_artifact} to store-recon/${TARGET_BRANCH}..."
+                PUSH_RETRY_COUNT=5
+                PUSH_RETRY_DELAY_SECONDS=15
+                DOMAIN_PUSH_SUCCESS=false
+                for i_push in $(seq 1 $PUSH_RETRY_COUNT); do
+                  echo "Pre-push pull --rebase for ${domain_name_from_artifact}, attempt ${i_push}..."
+                  if [ -d ".git/rebase-apply" ] || [ -d ".git/rebase-merge" ]; then
+                     echo "Aborting previous rebase before pre-push pull attempt ${i_push}..."
+                     git rebase --abort || true
+                  fi
+                  if ! git pull --rebase --autostash origin ${TARGET_BRANCH}; then
+                    echo "::warning::Pre-push pull --rebase failed for ${domain_name_from_artifact}. Attempting push anyway..."
+                  fi
+
+                  if git push origin HEAD:${TARGET_BRANCH}; then 
+                    echo "Successfully pushed changes for ${domain_name_from_artifact} to store-recon/${TARGET_BRANCH}."
+                    DOMAIN_PUSH_SUCCESS=true
+                    break 
+                  fi
+
+                  if [ $i_push -lt $PUSH_RETRY_COUNT ]; then
+                    echo "Push attempt $i_push for ${domain_name_from_artifact} failed. Retrying in $PUSH_RETRY_DELAY_SECONDS seconds..."
+                    sleep $PUSH_RETRY_DELAY_SECONDS
+                  else
+                    echo "::error::Push for ${domain_name_from_artifact} to store-recon/${TARGET_BRANCH} failed after $PUSH_RETRY_COUNT attempts."
+                    OVERALL_SUCCESS=false
+                    echo "Resetting local HEAD to origin/${TARGET_BRANCH} to discard unpushed commit for ${domain_name_from_artifact}."
+                    git fetch origin ${TARGET_BRANCH}
+                    git reset --hard origin/${TARGET_BRANCH}
+                    break 
+                  fi
+                done
+              else
+                echo "No changes to commit for ${domain_name_from_artifact} (path: ${target_file_path})"
+              fi
+            else
+              echo "::warning::Result file not found at '$source_file_path' for artifact folder '$artifact_folder'. Skipping this domain."
+            fi
+          done
+          shopt -u nullglob
+
+          echo "--- Domain processing complete ---"
+          if [ "$OVERALL_SUCCESS" = true ]; then
+            echo "All domains processed and pushed successfully (or no changes detected for them)."
+            exit 0
+          else
+            echo "::error::One or more domains encountered issues during processing or push. Check logs above."
+            exit 1
+          fi
 
