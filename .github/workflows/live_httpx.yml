@@ -249,25 +249,36 @@ jobs:
           find "$OUT" -maxdepth 1 -type f -name 'httpx_sub_*.txt' -delete
           echo "Cleanup of sub-files done."          
             
-      - name: Compute per-chunk artifact name
-        id: art
+      - name: Compute artifact details
+        id: art_details # Changed id for clarity as it now outputs more
         run: |
-          D="${{ matrix.pair.domain }}"
-          CHN="$(basename "${{ matrix.pair.chunk }}")"
-          # this writes an output called 'artifact_name'
-          echo "artifact_name=httpx-${D}-${CHN}" >> $GITHUB_OUTPUT
-          ANAME="httpx-${D}-${CHN}"
-           # debug output so you can see it in the log
-          echo ">> DEBUG: artifact_name is '$ANAME'"
-            
+          DOMAIN="${{ matrix.pair.domain }}"
+          CHUNK_FILE_PATH="${{ matrix.pair.chunk }}" # e.g., results/fig.co/chunks/chunk_01.txt
+          
+          # Get the basename of the original chunk file (e.g., chunk_01.txt)
+          CHUNK_BASENAME=$(basename "$CHUNK_FILE_PATH")
+          
+          # Construct the artifact name
+          ARTIFACT_NAME="httpx-${DOMAIN}-${CHUNK_BASENAME}"
+          echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+          
+          # Construct the exact path of the file to be uploaded
+          # This file is created by the 'Probe with httpx' step's recombination logic
+          FILE_TO_UPLOAD_PATH="results/${DOMAIN}/httpx_out/httpx_${CHUNK_BASENAME}" # No extra .txt at the end here
+          echo "file_to_upload=${FILE_TO_UPLOAD_PATH}" >> $GITHUB_OUTPUT
+
+          echo ">> DEBUG: Artifact Name: '$ARTIFACT_NAME'"
+          echo ">> DEBUG: File to Upload: '$FILE_TO_UPLOAD_PATH'"
+
           
       - name: Upload per‑chunk httpx results
         uses: actions/upload-artifact@v4
         env:
           ART_NAME: ${{ steps.art.outputs.artifact_name }}
         with:
-          name: ${{ env.ART_NAME }}
-          path: results/${{ matrix.pair.domain }}/httpx_out/httpx_$(basename "${{ matrix.pair.chunk }}").txt
+          name: ${{ steps.art_details.outputs.artifact_name }}
+          path: ${{ steps.art_details.outputs.file_to_upload }} # Use the computed path
+          if-no-files-found: error
 
 
   aggregate_results:
