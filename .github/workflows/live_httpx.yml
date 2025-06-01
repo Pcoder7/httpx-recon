@@ -224,10 +224,30 @@ jobs:
 
           # — now RECOMBINE all sub-results into one per original chunk:
 
-          find "$OUT" -type f -name 'httpx_*.txt' -print0 \
-            | xargs -0 cat \
-            | sort -u > "${OUT}/httpx_$(basename "$CH").txt"
+          FINAL_TARGET_FILE="${OUT}/httpx_$(basename "$CH").txt"
+          TEMP_AGGREGATED_FILE=$(mktemp "${OUT}/aggregated_XXXXXX.tmp") # Create temp file IN $OUT
+
+          echo "Consolidating results. Final target: $FINAL_TARGET_FILE"
+         
+          # Collect all source httpx data (httpx_chunk_XX.txt for small, or httpx_sub_YY.txt for large)
+          # The -not -name part is just a safeguard for mktemp if it somehow reused a name already matching.
           
+          find "$OUT" -maxdepth 1 -type f -name 'httpx_*.txt' -not -name "$(basename "$TEMP_AGGREGATED_FILE")" -print0 \
+            | xargs -0 --no-run-if-empty cat \
+            | sort -u > "$TEMP_AGGREGATED_FILE"
+          
+          # Now, atomically replace or create the FINAL_TARGET_FILE with the sorted content
+          mv "$TEMP_AGGREGATED_FILE" "$FINAL_TARGET_FILE"
+          
+          echo "Recombination complete. Final file $FINAL_TARGET_FILE created/updated."
+          ls -l "$FINAL_TARGET_FILE"          
+          
+          # This is only relevant if it was a large file run. It won't harm if it was a small file run (no sub files).
+          # Only delete 'httpx_sub_*.txt' and NOT the 'httpx_chunk_*.txt' which is our final file.
+          
+          echo "Cleaning up intermediate httpx_sub_*.txt files from $OUT..."
+          find "$OUT" -maxdepth 1 -type f -name 'httpx_sub_*.txt' -delete
+          echo "Cleanup of sub-files done."          
             
       - name: Compute per-chunk artifact name
         id: art
@@ -247,7 +267,7 @@ jobs:
           ART_NAME: ${{ steps.art.outputs.artifact_name }}
         with:
           name: ${{ env.ART_NAME }}
-          path: results/${{ matrix.pair.domain }}/httpx_out/*.txt
+          path: results/${{ matrix.pair.domain }}/httpx_out/httpx_$(basename "${{ matrix.pair.chunk }}").txt
 
 
   aggregate_results:
