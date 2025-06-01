@@ -247,7 +247,25 @@ jobs:
           
           echo "Cleaning up intermediate httpx_sub_*.txt files from $OUT..."
           find "$OUT" -maxdepth 1 -type f -name 'httpx_sub_*.txt' -delete
-          echo "Cleanup of sub-files done."          
+          echo "Cleanup of sub-files done."         
+          echo "--- FINAL CHECK BEFORE PROBE STEP ENDS for domain ${{ matrix.pair.domain }} chunk $(basename "$CH") ---"
+          EXPECTED_UPLOAD_FILE_PATH="results/${{ matrix.pair.domain }}/httpx_out/httpx_$(basename "$CH")"
+          echo "Upload step will look for: $EXPECTED_UPLOAD_FILE_PATH"
+          
+          echo "Listing contents of $OUT (which is results/${{ matrix.pair.domain }}/httpx_out/):"
+          ls -AlR "$OUT"
+          
+          echo "Checking specifically for $EXPECTED_UPLOAD_FILE_PATH:"
+          if [ -f "$EXPECTED_UPLOAD_FILE_PATH" ]; then
+            echo "SUCCESS: File $EXPECTED_UPLOAD_FILE_PATH FOUND."
+            ls -l "$EXPECTED_UPLOAD_FILE_PATH"
+            echo "Contents (first 3 lines):"
+            head -n 3 "$EXPECTED_UPLOAD_FILE_PATH"
+          else
+            echo "::error::FAILURE: File $EXPECTED_UPLOAD_FILE_PATH NOT FOUND at the end of the probe step!"
+            echo "This is why the upload step will fail."
+          fi
+          echo "--- END OF FINAL CHECK ---"          
             
       - name: Compute artifact details
         id: art_details # Changed id for clarity as it now outputs more
