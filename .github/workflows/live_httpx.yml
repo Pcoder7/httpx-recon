@@ -224,7 +224,7 @@ jobs:
 
           # — now RECOMBINE all sub-results into one per original chunk:
 
-          FINAL_TARGET_FILE="${OUT}/httpx_$(basename "$CH").txt"
+          FINAL_TARGET_FILE="${OUT}/httpx_$(basename "$CH")"
           TEMP_AGGREGATED_FILE=$(mktemp "${OUT}/aggregated_XXXXXX.tmp") # Create temp file IN $OUT
 
           echo "Consolidating results. Final target: $FINAL_TARGET_FILE"
