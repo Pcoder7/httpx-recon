@@ -286,6 +286,24 @@ jobs:
             go install github.com/tomnomnom/anew@latest
           else
             echo "anew already cached"
+          fi      
+      
+      - name: Clean results directory before download
+        run: |
+          echo "Cleaning results directory..."
+          if [ -d "results" ]; then
+            # The '|| true' ensures the step doesn't fail if 'results' doesn't exist yet (e.g., first run)
+            # or if it contains files that rm might have issues with (though less likely here).
+            # A more robust way might be to remove and recreate if it exists.
+            rm -rf results/* results/.* 2>/dev/null || true 
+            # Alternatively, to be absolutely sure, remove and recreate:
+            # rm -rf results
+            # mkdir -p results
+            echo "Contents of results directory after cleaning:"
+            ls -A results || echo "Results directory is empty or does not exist."
+          else
+            echo "Results directory does not exist, no cleaning needed."
+            mkdir -p results # Ensure it exists for the download step
           fi          
       - name: Download all httpx artifacts
         uses: actions/download-artifact@v4
@@ -347,6 +365,7 @@ jobs:
     # Only run if previous stages were successful and there was data to process
     if: ${{ success() && needs.prepare_matrix.outputs.matrix != '[]' }}
     steps:
+        
       - name: Download all aggregated domain results
         uses: actions/download-artifact@v4
         with:
