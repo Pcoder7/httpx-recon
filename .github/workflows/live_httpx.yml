@@ -358,6 +358,8 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: results
+          pattern: httpx-*-chunk_*.txt
+          
 
       - name: Aggregate for ${{ matrix.domain }}
         run: |
