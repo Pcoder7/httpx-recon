@@ -361,7 +361,7 @@ jobs:
       - name: Checkout external repository (store-recon)
         uses: actions/checkout@v3
         with:
-          repository: YOUR_OTHER_ACCOUNT_USERNAME/store-recon # IMPORTANT: Replace with actual username/org
+          repository: pushrockzz/store-recon # IMPORTANT: Replace with actual username/org
           token: ${{ secrets.STORE_RECON_PAT }} # PAT with 'repo' scope for store-recon
           path: store-recon-checkout # Checkout into a specific subdirectory
           ref: main # Or your target branch in store-recon
