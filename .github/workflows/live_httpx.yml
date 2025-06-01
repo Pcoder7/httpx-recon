@@ -104,6 +104,11 @@ jobs:
   httpx:
     needs: prepare_matrix
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/pcoder7/spider-puredns-actions:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GHCR_TOKEN }}    
     if: ${{ needs.prepare_matrix.outputs.matrix != '[]' }}
     strategy:
       fail-fast: false
@@ -127,16 +132,6 @@ jobs:
       - name: Create mod cache directory
         run: mkdir -p $HOME/go/pkg/mod
       
-      - name: Cache Go binaries (httpx, anew)
-        uses: actions/cache@v3
-        with:
-          path: |
-            $HOME/go/pkg/mod
-             ~/.cache/go-build
-             $HOME/go/bin
-          key: go-cache-${{ github.ref_name }} 
-          restore-keys: |
-            go-cache-
       
       - name: Ensure httpx & anew are installed
         run: |
@@ -148,16 +143,15 @@ jobs:
             echo "find actually found httpx path"
             
           else
-            echo "httpx already cached"
+            echo "httpx already installed"
           fi
           if ! command -v anew >/dev/null; then
             go install -v github.com/tomnomnom/anew@latest
             
           else
-            echo "anew already cached"
+            echo "anew already installed"
           fi
-          ls -R "results"
-      
+                
       - name: Download chunk files
         uses: actions/download-artifact@v4
         with: 
@@ -197,9 +191,9 @@ jobs:
 
             # decide parallelism & threads based on original chunk size
             if [ "$LINES" -gt 35000 ]; then
-              JOBS=15; THREADS=250
+              JOBS=12; THREADS=250
             elif [ "$LINES" -gt 15000 ]; then
-              JOBS=12; THREADS=200
+              JOBS=10; THREADS=200
             else
               # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
               SUBCOUNT=$(( (LINES + 1500 - 1) / 1500 ))
@@ -240,7 +234,7 @@ jobs:
           mv "$TEMP_AGGREGATED_FILE" "$FINAL_TARGET_FILE"
           
           echo "Recombination complete. Final file $FINAL_TARGET_FILE created/updated."
-          ls -l "$FINAL_TARGET_FILE"          
+        
           
           # This is only relevant if it was a large file run. It won't harm if it was a small file run (no sub files).
           # Only delete 'httpx_sub_*.txt' and NOT the 'httpx_chunk_*.txt' which is our final file.
@@ -253,7 +247,6 @@ jobs:
           echo "Upload step will look for: $EXPECTED_UPLOAD_FILE_PATH"
           
           echo "Listing contents of $OUT (which is results/${{ matrix.pair.domain }}/httpx_out/):"
-          ls -AlR "$OUT"
           
           echo "Checking specifically for $EXPECTED_UPLOAD_FILE_PATH:"
           if [ -f "$EXPECTED_UPLOAD_FILE_PATH" ]; then
@@ -306,27 +299,18 @@ jobs:
       cancel-in-progress: false
     needs: [prepare_matrix, httpx]
     runs-on: ubuntu-latest
+    container:
+      image: ghcr.io/pcoder7/spider-puredns-actions:latest
+      credentials:
+        username: ${{ github.actor }}
+        password: ${{ secrets.GHCR_TOKEN }}    
     strategy:
       matrix:
         domain: ${{ fromJson(needs.prepare_matrix.outputs.unique_domains) }}
     steps:
       - uses: actions/checkout@v3
         with: { fetch-depth: 0 }
-
-      - name: Cache Go modules & binaries
-        uses: actions/cache@v3
-        with:
-          path: |
-            $HOME/go/pkg/mod
-            ~/.cache/go-build
-            $HOME/go/bin
-          key: go-cache-${{ github.ref_name }}
-          restore-keys: |
-            go-cache-
-      - name: Setup Go (for go install)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'       
+   
 
       - name: Ensure anew is installed
         run: |
@@ -334,7 +318,7 @@ jobs:
             echo "Installing anew…"
             go install github.com/tomnomnom/anew@latest
           else
-            echo "anew already cached"
+            echo "anew already installed"
           fi      
       
       - name: Clean results directory before download
@@ -345,9 +329,6 @@ jobs:
             # or if it contains files that rm might have issues with (though less likely here).
             # A more robust way might be to remove and recreate if it exists.
             rm -rf results/* results/.* 2>/dev/null || true 
-            # Alternatively, to be absolutely sure, remove and recreate:
-            # rm -rf results
-            # mkdir -p results
             echo "Contents of results directory after cleaning:"
             ls -A results || echo "Results directory is empty or does not exist."
           else
@@ -368,7 +349,6 @@ jobs:
           mkdir -p "results/$D" 
           
           echo "Listing contents of 'results' directory after download (artifacts are in subdirs):"
-          ls -AlR results # More detailed listing for debugging
                             
           AGGREGATED_CONTENT_TMP=$(mktemp)
           FINAL_RESULT_FILE="results/$D/httpx_result.txt"
@@ -398,7 +378,7 @@ jobs:
           rm -f "$AGGREGATED_CONTENT_TMP"
           
           echo "Final aggregated file for $D:"
-          ls -l "$FINAL_RESULT_FILE"
+
           echo "Line count in final aggregated file for $D:"
           wc -l < "$FINAL_RESULT_FILE"
 
@@ -424,9 +404,6 @@ jobs:
           # Pattern to download all artifacts starting with "aggregated-result-"
           pattern: aggregated-result-*
           # 'merge-multiple: false' (default) is appropriate here, as each artifact is distinct.
-
-      - name: List downloaded artifacts structure for debugging
-        run: ls -R temp_aggregated_results
 
       - name: Checkout external repository (store-recon)
         uses: actions/checkout@v3
@@ -554,26 +531,3 @@ jobs:
             echo "::error::One or more domains encountered issues during processing or push. Check logs above."
             exit 1
           fi
-
-  delete_artifacts:
-    name: Delete Workflow Artifacts
-    needs: commit_to_external_repo # Ensure this runs after the commit job
-    runs-on: ubuntu-latest
-    # 'if: always()' ensures this job runs even if 'commit_to_external_repo' fails,
-    # which is generally good for cleanup.
-    # If you only want to delete artifacts on successful commit, use 'if: success()'
-    if: always()
-    permissions:
-      actions: write # Required to delete artifacts
-    steps:
-      - name: Delete all workflow run artifacts
-        uses: geekyeggo/delete-artifact@v2 # Using v2 as v4 for delete-artifact doesn't exist and v2 is commonly used
-        with:
-          # If 'name' is not specified, it defaults to deleting all artifacts for the run.
-          # For explicit clarity, you could use:
-          # name: |  # A multi-line string to list patterns or names, but we want all
-          #  httpx-chunks
-          #  httpx-*
-          #  aggregated-result-*
-          # However, omitting 'name' is simpler for "all artifacts".
-          failOnError: false # Set to true if you want the workflow to fail if artifact deletion fails
