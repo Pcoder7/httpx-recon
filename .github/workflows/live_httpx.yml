@@ -117,31 +117,15 @@ jobs:
       max-parallel: 20
 
     steps:
-
-      - name: Install GNU Parallel
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y parallel    
-    
-      - name: Setup Go (for go install)
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.22'
-          
-      - uses: actions/checkout@v3
-      - name: Create mod cache directory
-        run: mkdir -p $HOME/go/pkg/mod
-      
-      
+     
+     
       - name: Ensure httpx & anew are installed
         run: |
          
           if ! command -v httpx >/dev/null; then
             go install -v github.com/projectdiscovery/httpx/cmd/httpx@latest
             echo "httpx installed"
-            find $HOME -name httpx -type f
-            echo "find actually found httpx path"
-            
+                
           else
             echo "httpx already installed"
           fi
@@ -157,13 +141,8 @@ jobs:
         with: 
           name: httpx-chunks 
           path: results/
-      
-      #- name: List chunk files
-       # run: |
-        #  D="${{ matrix.pair.domain }}"
-         # echo "Contents of results/${D}/chunks:"
-          #ls -R "results/${D}/chunks"
-      
+   
+  
       - name: Probe with httpx on ${{ matrix.pair.domain }}
         run: |
        
@@ -291,7 +270,6 @@ jobs:
           path: ${{ steps.art_details.outputs.file_to_upload }} # Use the computed path
           if-no-files-found: error
 
-
   aggregate_results:
 
     concurrency:
@@ -340,8 +318,7 @@ jobs:
         with:
           path: results
           pattern: httpx-*-chunk_*.txt
-          
-
+        
       - name: Aggregate for ${{ matrix.domain }}
         run: |
           D="${{ matrix.domain }}"
