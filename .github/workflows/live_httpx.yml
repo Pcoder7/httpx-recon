@@ -158,7 +158,7 @@ jobs:
             echo "— ≤50 lines: single httpx with 100 threads"
             #httpx -l "$CH" -silent -threads 100 \
             #  -o "${OUT}/httpx_$(basename "$CH").txt"
-            nuclei -l "$CH" -silent -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 50 -o -o "${OUT}/httpx_$(basename "$CH").txt"
+            nuclei -l "$CH" -verbose -stats -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 50 -o -o "${OUT}/httpx_$(basename "$CH").txt"
 
           else
             # big: split into 1500-line sub-files
@@ -190,7 +190,7 @@ jobs:
              #       -o "$OUT/httpx_{/.}.txt" \
               #::: "$TMP"/sub_*.txt
             parallel -j"$JOBS" \
-              nuclei -l {} -silent -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 50 -o "OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
+              nuclei -l {} -verbose -stats -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 50 -o "OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
 
             # cleanup temp sub-chunks
             rm -rf "$TMP"
