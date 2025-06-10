@@ -53,19 +53,19 @@ jobs:
               # 3. Create per-domain chunk dir & split into 100-line files
               CHUNK_DIR="results/$d/chunks"
               mkdir -p "$CHUNK_DIR"
-              if [ "$LINES" -ge 200000 ]; then
-                echo "— ≥200 000 lines: splitting into 50 equal chunks"
-                split -n l/50 \
+              if [ "$LINES" -ge 1000 ]; then
+                echo "— ≥1 000 lines: splitting into 30 equal chunks"
+                split -n l/30 \
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
-              elif [ "$LINES" -gt 1500 ]; then
+              elif [ "$LINES" -gt 200 ]; then
                 echo "— > 1500 lines: splitting into 20 equal chunks"
-                split -n l/20 \
+                split -n l/10 \
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
               else
-                echo "— ≤ 1500 lines: splitting into 200-line chunks"
-                split -l 200 \
+                echo "— ≤ 50 lines: splitting into 200-line chunks"
+                split -l 50 \
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
               fi          
@@ -153,7 +153,7 @@ jobs:
           LINES=$(wc -l < "$CH")
           echo "▶ Processing $CH — $LINES lines"
 
-          if [ "$LINES" -le 1500 ]; then
+          if [ "$LINES" -le 50 ]; then
             # small: single httpx run
             echo "— ≤1500 lines: single httpx with 100 threads"
             #httpx -l "$CH" -silent -threads 100 \
@@ -169,10 +169,10 @@ jobs:
                   "$CH" "$TMP/sub_"
 
             # decide parallelism & threads based on original chunk size
-            if [ "$LINES" -gt 35000 ]; then
+            if [ "$LINES" -gt 300 ]; then
               JOBS=8; THREADS=250
-            elif [ "$LINES" -gt 15000 ]; then
-              JOBS=5; THREADS=200
+            elif [ "$LINES" -gt 150 ]; then
+              JOBS=5; # THREADS=200
             else
               # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
               SUBCOUNT=$(( (LINES + 1500 - 1) / 1500 ))
@@ -181,7 +181,7 @@ jobs:
               else
                 JOBS=8
               fi
-              THREADS=100
+             # THREADS=100
             fi
 
             echo "— Launching parallel -j$JOBS with $THREADS threads"
