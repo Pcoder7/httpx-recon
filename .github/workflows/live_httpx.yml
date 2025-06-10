@@ -169,9 +169,9 @@ jobs:
                   "$CH" "$TMP/sub_"
 
             # decide parallelism & threads based on original chunk size
-            if [ "$LINES" -gt 300 ]; then
+            if [ "$LINES" -gt 80 ]; then
               JOBS=8; #THREADS=250
-            elif [ "$LINES" -gt 150 ]; then
+            elif [ "$LINES" -gt 50 ]; then
               JOBS=5; # THREADS=200
             else
               # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
