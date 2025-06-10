@@ -156,8 +156,8 @@ jobs:
           if [ "$LINES" -le 1500 ]; then
             # small: single httpx run
             echo "— ≤1500 lines: single httpx with 100 threads"
-            httpx -l "$CH" -silent -threads 100 \
-              -o "${OUT}/httpx_$(basename "$CH").txt"
+            #httpx -l "$CH" -silent -threads 100 \
+            #  -o "${OUT}/httpx_$(basename "$CH").txt"
 
           else
             # big: split into 1500-line sub-files
@@ -169,9 +169,9 @@ jobs:
 
             # decide parallelism & threads based on original chunk size
             if [ "$LINES" -gt 35000 ]; then
-              JOBS=12; THREADS=250
+              JOBS=8; THREADS=250
             elif [ "$LINES" -gt 15000 ]; then
-              JOBS=10; THREADS=200
+              JOBS=5; THREADS=200
             else
               # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
               SUBCOUNT=$(( (LINES + 1500 - 1) / 1500 ))
@@ -184,10 +184,12 @@ jobs:
             fi
 
             echo "— Launching parallel -j$JOBS with $THREADS threads"
+            #parallel -j"$JOBS" \
+           #   httpx -l {} -silent -threads "$THREADS" -retries 1 -random-agent -timeout 10 \
+             #       -o "$OUT/httpx_{/.}.txt" \
+              #::: "$TMP"/sub_*.txt
             parallel -j"$JOBS" \
-              httpx -l {} -silent -threads "$THREADS" -retries 1 -random-agent -timeout 10 \
-                    -o "$OUT/httpx_{/.}.txt" \
-              ::: "$TMP"/sub_*.txt
+              nuclei -l {} -silent -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 50 -o "OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
 
             # cleanup temp sub-chunks
             rm -rf "$TMP"
