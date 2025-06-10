@@ -59,12 +59,12 @@ jobs:
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
               elif [ "$LINES" -gt 200 ]; then
-                echo "— > 1500 lines: splitting into 20 equal chunks"
+                echo "— > 200 lines: splitting into 20 equal chunks"
                 split -n l/10 \
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
               else
-                echo "— ≤ 50 lines: splitting into 200-line chunks"
+                echo "— ≤ 50 lines: splitting into 50-line chunks"
                 split -l 50 \
                       --numeric-suffixes=1 --suffix-length=2 --additional-suffix=.txt \
                       "$SRC" "$CHUNK_DIR/chunk_"
@@ -170,12 +170,12 @@ jobs:
 
             # decide parallelism & threads based on original chunk size
             if [ "$LINES" -gt 300 ]; then
-              JOBS=8; THREADS=250
+              JOBS=8; #THREADS=250
             elif [ "$LINES" -gt 150 ]; then
               JOBS=5; # THREADS=200
             else
               # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
-              SUBCOUNT=$(( (LINES + 1500 - 1) / 1500 ))
+              SUBCOUNT=$(( (LINES + 50 - 1) / 50 ))
               if [ "$SUBCOUNT" -lt 10 ]; then
                 JOBS=$SUBCOUNT
               else
