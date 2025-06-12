@@ -1,4 +1,3 @@
-
 search.af.mil
 my.af.mil
 mobile.af.mil
