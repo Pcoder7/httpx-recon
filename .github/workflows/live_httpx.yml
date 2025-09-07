@@ -153,7 +153,7 @@ jobs:
           LINES=$(wc -l < "$CH")
           echo "▶ Processing $CH — $LINES lines"
 
-          if [ "$LINES" -le 50 ]; then
+          if [ "$LINES" -le 5000 ]; then
             # small: single httpx run
             echo "— ≤50 lines: single httpx with 100 threads"
             httpx -l "$CH" -silent -threads 100 -retries 3 -sc -cl -vhost -fhr -random-agent -timeout 15 -delay 200ms -no-color -o "${OUT}/httpx_$(basename "$CH").txt"
@@ -163,14 +163,14 @@ jobs:
             # big: split into 1500-line sub-files
             TMP=$(mktemp -d)
             # suffix-length=2 covers up to 99 subchunks (we’ll have ≤30)
-            split -l 50 --numeric-suffixes=1 --suffix-length=2 \
+            split -l 20000 --numeric-suffixes=1 --suffix-length=2 \
                   --additional-suffix=.txt \
                   "$CH" "$TMP/sub_"
 
             # decide parallelism & threads based on original chunk size
-            if [ "$LINES" -gt 80 ]; then
+            if [ "$LINES" -gt 20000 ]; then
               JOBS=8; #THREADS=250
-            elif [ "$LINES" -gt 50 ]; then
+            elif [ "$LINES" -gt 8000 ]; then
               JOBS=5; # THREADS=200
             else
               # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
