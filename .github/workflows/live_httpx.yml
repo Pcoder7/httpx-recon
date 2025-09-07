@@ -168,10 +168,10 @@ jobs:
                   "$CH" "$TMP/sub_"
 
             # decide parallelism & threads based on original chunk size
-            if [ "$LINES" -gt 20000 ]; then
-              JOBS=8; #THREADS=250
-            elif [ "$LINES" -gt 8000 ]; then
-              JOBS=5; # THREADS=200
+            if [ "$LINES" -gt 15000 ]; then
+              JOBS=8; THREADS=150;
+            elif [ "$LINES" -gt 6000 ]; then
+              JOBS=5; THREADS=100;
             else
               # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
               SUBCOUNT=$(( (LINES + 50 - 1) / 50 ))
@@ -184,7 +184,7 @@ jobs:
             fi
 
             echo "— Launching parallel -j$JOBS with $THREADS threads"
-            parallel -j"$JOBS" httpx -l {} -silent -threads "$THREADS" -retries 3 -sc -cl -vhost -fhr -random-agent -timeout 15 -delay 200ms -no-color -o "$OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
+            parallel -j"$JOBS" httpx -l {} -threads "$THREADS" -retries 3 -sc -cl -vhost -fhr -random-agent -timeout 15 -delay 200ms -no-color -silent -o "$OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
 
             # cleanup temp sub-chunks
              #       -o "$OUT/httpx_{/.}.txt" \
