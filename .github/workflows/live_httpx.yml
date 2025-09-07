@@ -156,9 +156,8 @@ jobs:
           if [ "$LINES" -le 50 ]; then
             # small: single httpx run
             echo "— ≤50 lines: single httpx with 100 threads"
-            #httpx -l "$CH" -silent -threads 100 \
-            #  -o "${OUT}/httpx_$(basename "$CH").txt"
-            nuclei -l "$CH" -verbose -stats -severity low,high -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 20 -o -o "${OUT}/httpx_$(basename "$CH").txt"
+            httpx -l "$CH" -silent -threads 100 -retries 3 -sc -cl -vhost -fhr -random-agent -timeout 15 -o "${OUT}/httpx_$(basename "$CH").txt"
+            #nuclei -l "$CH" -verbose -stats -severity low,high -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 20 -o -o "${OUT}/httpx_$(basename "$CH").txt"
 
           else
             # big: split into 1500-line sub-files
@@ -185,12 +184,13 @@ jobs:
             fi
 
             echo "— Launching parallel -j$JOBS with $THREADS threads"
-            #parallel -j"$JOBS" \
-           #   httpx -l {} -silent -threads "$THREADS" -retries 1 -random-agent -timeout 10 \
+            parallel -j"$JOBS" httpx -l {} -silent -threads "$THREADS" -retries 3 -sc -cl -vhost -fhr -random-agent -timeout 15 -o "$OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
+
+            # cleanup temp sub-chunks
              #       -o "$OUT/httpx_{/.}.txt" \
               #::: "$TMP"/sub_*.txt
-            parallel -j"$JOBS" \
-              nuclei -l {} -verbose -stats -severity low,high -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 30 -o "$OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
+            #parallel -j"$JOBS" \
+             # nuclei -l {} -verbose -stats -severity low,high -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 30 -o "$OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
 
             # cleanup temp sub-chunks
             rm -rf "$TMP"
