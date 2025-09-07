@@ -163,15 +163,15 @@ jobs:
             # big: split into 1500-line sub-files
             TMP=$(mktemp -d)
             # suffix-length=2 covers up to 99 subchunks (we’ll have ≤30)
-            split -l 20000 --numeric-suffixes=1 --suffix-length=2 \
+            split -l 1550 --numeric-suffixes=1 --suffix-length=2 \
                   --additional-suffix=.txt \
                   "$CH" "$TMP/sub_"
 
             # decide parallelism & threads based on original chunk size
             if [ "$LINES" -gt 15000 ]; then
-              JOBS=8; THREADS=150;
+              JOBS=10; THREADS=120;
             elif [ "$LINES" -gt 6000 ]; then
-              JOBS=5; THREADS=100;
+              JOBS=7; THREADS=80;
             else
               # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
               SUBCOUNT=$(( (LINES + 50 - 1) / 50 ))
