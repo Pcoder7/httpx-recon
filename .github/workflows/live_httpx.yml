@@ -152,43 +152,33 @@ jobs:
      
       - name: Probe with Gbounty on ${{ matrix.pair.domain }}
         shell: bash
-        run: |
-          D="${{ matrix.pair.domain }}"
+        run: |          D="${{ matrix.pair.domain }}"
           CH="${{ matrix.pair.chunk }}"
           OUT="results/${D}/httpx_out"
           mkdir -p "$OUT"
 
-          EXPECTED_OUTPUT_FILE="${OUT}/httpx_$(basename "$CH" | sed 's/\.txt$/.json/') "
-          GBOUNTY_OUTPUT_BASE="${OUT}/httpx_$(basename "$CH" .txt)"
+          # ==================== THE FIX IS HERE ====================
+          # Define the SINGLE, CORRECT output file path without any extension.
+          # e.g., results/domain/httpx_out/httpx_chunk_01
+          OUTPUT_FILE_PATH="${OUT}/httpx_$(basename "$CH" .txt)"
+          # =========================================================
 
-          # === STEP 3: LIST FILES *BEFORE* THE SCAN ===
-          echo "--- Listing Directory Contents (BEFORE SCAN) ---"
-          ls -laR results
-          echo "------------------------------------------------"
-          
           echo "▶ Processing $CH with Gbounty for JSON output"
-          echo "  - Instructing Gbounty to write to base: ${GBOUNTY_OUTPUT_BASE}"
-          echo "  - Expecting final JSON file at: ${EXPECTED_OUTPUT_FILE}"
-
-          # === STEP 4: RUN THE SCAN AND CAPTURE ALL OUTPUT ===
-          # We will redirect stderr (2) to stdout (1) to make sure we see any errors
-          gbounty --urls-file "$CH" -c 10 -r 10 -p SQLi_StatusCode.bb2 --json -o "$GBOUNTY_OUTPUT_BASE" 2>&1
-
+          echo "  - Gbounty will write to: ${OUTPUT_FILE_PATH}"
+          echo "  - This script will check for: ${OUTPUT_FILE_PATH}"
+          
+          # Run the command, telling it to create the file with the exact name.
+          gbounty --urls-file "$CH" -silent -c 10 -r 10 -p SQLi_StatusCode.bb2 --json -o "$OUTPUT_FILE_PATH"
+          
           echo "Gbounty scan finished."
 
-          # === STEP 5: LIST FILES *AFTER* THE SCAN (MOST IMPORTANT STEP) ===
-          echo "--- Listing Directory Contents (AFTER SCAN) ---"
-          # This will show us if ANY file was created, even with a different name or in a different location.
-          ls -laR results
-          echo "-----------------------------------------------"
-
-          # === STEP 6: CHECK FOR THE EXPECTED FILE (NO CHANGES HERE) ===
-          if [ -f "$EXPECTED_OUTPUT_FILE" ]; then
-            echo "SUCCESS: Output file '$EXPECTED_OUTPUT_FILE' was created by Gbounty."
-            ls -l "$EXPECTED_OUTPUT_FILE"
+          # This check now looks for the correct extension-less filename.
+          if [ -f "$OUTPUT_FILE_PATH" ]; then
+            echo "SUCCESS: Output file '$OUTPUT_FILE_PATH' was created by Gbounty."
+            ls -l "$OUTPUT_FILE_PATH"
           else
             echo "::warning:: Gbounty did not create an output file. Creating an empty one."
-            touch "$EXPECTED_OUTPUT_FILE"
+            touch "$OUTPUT_FILE_PATH"
           fi
 
           # =========================================================
@@ -198,19 +188,18 @@ jobs:
         run: |
           DOMAIN="${{ matrix.pair.domain }}"
           CHUNK_FILE_PATH="${{ matrix.pair.chunk }}"
-          # Get basename, e.g., "chunk_01.txt"
-          CHUNK_BASENAME=$(basename "$CHUNK_FILE_PATH")
+          # Get basename without extension, e.g., "chunk_01"
+          CHUNK_BASENAME_NO_EXT=$(basename "${CHUNK_FILE_PATH}" .txt)
           
-          # ==================== THE FIX IS HERE (Part 2) ====================
-          # We replace .txt with .json for both the artifact name and the upload path
-          # to match the file that was actually created.
+          # ==================== THE FIX IS HERE ====================
+          # The artifact name and upload path must NOT have an extension.
           
-          # New artifact name for clarity, e.g., "httpx-domain-chunk_01.json"
-          ARTIFACT_NAME="httpx-${DOMAIN}-${CHUNK_BASENAME%.txt}.json"
+          # e.g., "httpx-domain-chunk_01"
+          ARTIFACT_NAME="httpx-${DOMAIN}-${CHUNK_BASENAME_NO_EXT}"
           echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
           
-          # New path for the uploader, e.g., "results/domain/httpx_out/httpx_chunk_01.json"
-          FILE_TO_UPLOAD_PATH="results/${DOMAIN}/httpx_out/httpx_${CHUNK_BASENAME%.txt}.json"
+          # e.g., "results/domain/httpx_out/httpx_chunk_01"
+          FILE_TO_UPLOAD_PATH="results/${DOMAIN}/httpx_out/httpx_${CHUNK_BASENAME_NO_EXT}"
           echo "file_to_upload=${FILE_TO_UPLOAD_PATH}" >> $GITHUB_OUTPUT
 
           
