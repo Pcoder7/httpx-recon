@@ -117,6 +117,10 @@ jobs:
       max-parallel: 20
 
     steps:
+      - uses: actions/checkout@v4
+        with: 
+          fetch-depth: 0     
+          
       - name: Ensure httpx & anew are installed
         run: |
          
