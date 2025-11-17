@@ -134,146 +134,85 @@ jobs:
           else
             echo "anew already installed"
           fi
+
+      - name: Install Go and Gbounty scanner
+        run: |
+          # The ubuntu-latest runner has Go. If not, you would add an installation step here.
+          echo "Installing Gbounty..."
+          go install -v github.com/BountySecurity/gbounty/v2/cmd/gbounty@latest
+          gbounty -h     
                 
       - name: Download chunk files
         uses: actions/download-artifact@v4
         with: 
           name: httpx-chunks 
           path: results/
-   
-  
-      - name: Probe with httpx on ${{ matrix.pair.domain }}
+     
+      - name: Probe with Gbounty on ${{ matrix.pair.domain }}
+        shell: bash
         run: |
-       
           D="${{ matrix.pair.domain }}"
           CH="${{ matrix.pair.chunk }}"
-          OUT="results/${D}/httpx_out"
+          OUT="results/${D}/httpx_out" # Keeping the output directory name for simplicity
           mkdir -p "$OUT"
       
           LINES=$(wc -l < "$CH")
-          echo "▶ Processing $CH — $LINES lines"
+          echo "▶ Processing $CH — $LINES lines with Gbounty"
 
-          if [ "$LINES" -le 5000 ]; then
-            # small: single httpx run
-            echo "— ≤50 lines: single httpx with 100 threads"
-            httpx -l "$CH" -silent -threads 100 -retries 3 -sc -cl -vhost -fhr -random-agent -timeout 15 -delay 200ms -no-color -o "${OUT}/httpx_$(basename "$CH").txt"
-            #nuclei -l "$CH" -verbose -stats -severity low,high -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 20 -o -o "${OUT}/httpx_$(basename "$CH").txt"
+          # Define the output file path. The aggregation job expects this naming convention.
+          OUTPUT_FILE="${OUT}/httpx_$(basename "$CH").txt"
 
-          else
-            # big: split into 1500-line sub-files
-            TMP=$(mktemp -d)
-            # suffix-length=2 covers up to 99 subchunks (we’ll have ≤30)
-            split -l 1550 --numeric-suffixes=1 --suffix-length=2 \
-                  --additional-suffix=.txt \
-                  "$CH" "$TMP/sub_"
-
-            # decide parallelism & threads based on original chunk size
-            if [ "$LINES" -gt 15000 ]; then
-              JOBS=10; THREADS=120;
-            elif [ "$LINES" -gt 6000 ]; then
-              JOBS=7; THREADS=80;
-            else
-              # 1500 < LINES ≤ 15000 → split count up to ceil(LINES/2000), cap at 10
-              SUBCOUNT=$(( (LINES + 50 - 1) / 50 ))
-              if [ "$SUBCOUNT" -lt 10 ]; then
-                JOBS=$SUBCOUNT
-              else
-                JOBS=8
-              fi
-             # THREADS=100
-            fi
-
-            echo "— Launching parallel -j$JOBS with $THREADS threads"
-            parallel -j"$JOBS" httpx -l {} -threads "$THREADS" -retries 3 -sc -cl -vhost -fhr -random-agent -timeout 15 -delay 200ms -no-color -silent -o "$OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
-
-            # cleanup temp sub-chunks
-             #       -o "$OUT/httpx_{/.}.txt" \
-              #::: "$TMP"/sub_*.txt
-            #parallel -j"$JOBS" \
-             # nuclei -l {} -verbose -stats -severity low,high -c 10 -probe-concurrency 100 -t ~/nuclei-templates/http/exposed-panels/ -bs 10 -scan-strategy template-spray -rl 30 -o "$OUT/httpx_{/.}.txt" ::: "$TMP"/sub_*.txt
-
-            # cleanup temp sub-chunks
-            rm -rf "$TMP"
-          fi
-
-
-          # — now RECOMBINE all sub-results into one per original chunk:
-
-          FINAL_TARGET_FILE="${OUT}/httpx_$(basename "$CH")"
-          TEMP_AGGREGATED_FILE=$(mktemp "${OUT}/aggregated_XXXXXX.tmp") # Create temp file IN $OUT
-
-          echo "Consolidating results. Final target: $FINAL_TARGET_FILE"
-         
-          # Collect all source httpx data (httpx_chunk_XX.txt for small, or httpx_sub_YY.txt for large)
-          # The -not -name part is just a safeguard for mktemp if it somehow reused a name already matching.
+          # The logic for splitting large files into sub-chunks is removed for simplicity.
+          # Gbounty's performance should be tested to see if this is necessary.
+          # For now, we run one command per chunk.
+          echo "— Launching Gbounty with 10 threads"
+          cat "$CH" | gbounty -silent -t 10 -timeout 15 -o "$OUTPUT_FILE"
           
-          find "$OUT" -maxdepth 1 -type f -name 'httpx_*.txt' -not -name "$(basename "$TEMP_AGGREGATED_FILE")" -print0 \
-            | xargs -0 --no-run-if-empty cat \
-            | sort -u > "$TEMP_AGGREGATED_FILE"
-          
-          # Now, atomically replace or create the FINAL_TARGET_FILE with the sorted content
-          mv "$TEMP_AGGREGATED_FILE" "$FINAL_TARGET_FILE"
-          
-          echo "Recombination complete. Final file $FINAL_TARGET_FILE created/updated."
+          echo "Gbounty scan complete. Results are in $OUTPUT_FILE."
         
+          # The complex recombination logic from the original workflow is no longer needed
+          # because we are not using the internal 'parallel' command.
           
-          # This is only relevant if it was a large file run. It won't harm if it was a small file run (no sub files).
-          # Only delete 'httpx_sub_*.txt' and NOT the 'httpx_chunk_*.txt' which is our final file.
-          
-          echo "Cleaning up intermediate httpx_sub_*.txt files from $OUT..."
-          find "$OUT" -maxdepth 1 -type f -name 'httpx_sub_*.txt' -delete
-          echo "Cleanup of sub-files done."         
           echo "--- FINAL CHECK BEFORE PROBE STEP ENDS for domain ${{ matrix.pair.domain }} chunk $(basename "$CH") ---"
-          EXPECTED_UPLOAD_FILE_PATH="results/${{ matrix.pair.domain }}/httpx_out/httpx_$(basename "$CH")"
-          echo "Upload step will look for: $EXPECTED_UPLOAD_FILE_PATH"
-          
-          echo "Listing contents of $OUT (which is results/${{ matrix.pair.domain }}/httpx_out/):"
-          
-          echo "Checking specifically for $EXPECTED_UPLOAD_FILE_PATH:"
-          if [ -f "$EXPECTED_UPLOAD_FILE_PATH" ]; then
-            echo "SUCCESS: File $EXPECTED_UPLOAD_FILE_PATH FOUND."
-            ls -l "$EXPECTED_UPLOAD_FILE_PATH"
-            echo "Contents (first 3 lines):"
-            head -n 3 "$EXPECTED_UPLOAD_FILE_PATH"
+          if [ -f "$OUTPUT_FILE" ]; then
+            echo "SUCCESS: File $OUTPUT_FILE FOUND."
+            ls -l "$OUTPUT_FILE"
+            echo "Contents (first 5 lines):"
+            head -n 5 "$OUTPUT_FILE"
           else
-            echo "::error::FAILURE: File $EXPECTED_UPLOAD_FILE_PATH NOT FOUND at the end of the probe step!"
+            echo "::error::FAILURE: File $OUTPUT_FILE NOT FOUND at the end of the probe step!"
             echo "This is why the upload step will fail."
           fi
           echo "--- END OF FINAL CHECK ---"          
             
       - name: Compute artifact details
-        id: art_details # Changed id for clarity as it now outputs more
+        id: art_details
         run: |
           DOMAIN="${{ matrix.pair.domain }}"
-          CHUNK_FILE_PATH="${{ matrix.pair.chunk }}" # e.g., results/fig.co/chunks/chunk_01.txt
-          
-          # Get the basename of the original chunk file (e.g., chunk_01.txt)
+          CHUNK_FILE_PATH="${{ matrix.pair.chunk }}"
           CHUNK_BASENAME=$(basename "$CHUNK_FILE_PATH")
           
-          # Construct the artifact name
-          ARTIFACT_NAME="httpx-${DOMAIN}-${CHUNK_BASENAME}"
+          ARTIFACT_NAME="httpx-${DOMAIN}-${CHUNK_BASENAME}" # Keep artifact name format
           echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
           
-          # Construct the exact path of the file to be uploaded
-          # This file is created by the 'Probe with httpx' step's recombination logic
-          FILE_TO_UPLOAD_PATH="results/${DOMAIN}/httpx_out/httpx_${CHUNK_BASENAME}" # No extra .txt at the end here
+          FILE_TO_UPLOAD_PATH="results/${DOMAIN}/httpx_out/httpx_${CHUNK_BASENAME}"
           echo "file_to_upload=${FILE_TO_UPLOAD_PATH}" >> $GITHUB_OUTPUT
 
           echo ">> DEBUG: Artifact Name: '$ARTIFACT_NAME'"
           echo ">> DEBUG: File to Upload: '$FILE_TO_UPLOAD_PATH'"
 
-          
-      - name: Upload per‑chunk httpx results
+      - name: Upload per‑chunk Gbounty results
         uses: actions/upload-artifact@v4
-        env:
-          ART_NAME: ${{ steps.art.outputs.artifact_name }}
         with:
           name: ${{ steps.art_details.outputs.artifact_name }}
-          path: ${{ steps.art_details.outputs.file_to_upload }} # Use the computed path
+          path: ${{ steps.art_details.outputs.file_to_upload }}
           if-no-files-found: error
+  
+   
+            
+          
 
-  aggregate_results:
-
+aggregate_results:
     concurrency:
       group: aggregate-results-${{ matrix.domain }}
       cancel-in-progress: false
