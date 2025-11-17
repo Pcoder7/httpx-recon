@@ -1,2 +1,3 @@
 https://ginandjuice.shop/catalog?searchTerm=boomboom
 https://ginandjuice.shop/catalog/product?productId=1
+https://ginandjuice.shop/catalog?category=Accessories
