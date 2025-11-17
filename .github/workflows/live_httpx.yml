@@ -159,7 +159,7 @@ jobs:
           # Gbounty's performance should be tested to see if this is necessary.
           # For now, we run one command per chunk.
           echo "— Launching Gbounty with 10 threads"
-          cat "$CH" | gbounty -silent -c 10 -r 10 -p SQLi.bb2 --markdown  -o "$OUTPUT_FILE"
+          gbounty  --urls-file "$CH" -silent -c 10 -r 10 -p SQLi.bb2 --markdown  -o "$OUTPUT_FILE"
           
           echo "Gbounty scan complete. Results are in $OUTPUT_FILE."
         
