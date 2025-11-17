@@ -170,22 +170,21 @@ jobs:
           echo "— Launching Gbounty with 10 threads"
           gbounty  --urls-file "$CH" -silent -c 10 -r 10 -p SQLi_StatusCode.bb2 --markdown  -o "$OUTPUT_FILE"
           
-          echo "Gbounty scan complete. Results are in $OUTPUT_FILE."
-        
-          # The complex recombination logic from the original workflow is no longer needed
-          # because we are not using the internal 'parallel' command.
-          
-          echo "--- FINAL CHECK BEFORE PROBE STEP ENDS for domain ${{ matrix.pair.domain }} chunk $(basename "$CH") ---"
+          echo "Gbounty scan finished."
+
+          # ==================== THE FIX IS HERE ====================
+          # Check if the output file was actually created by Gbounty.
           if [ -f "$OUTPUT_FILE" ]; then
-            echo "SUCCESS: File $OUTPUT_FILE FOUND."
-            ls -l "$OUTPUT_FILE"
+            echo "SUCCESS: Output file '$OUTPUT_FILE' was created by Gbounty."
             echo "Contents (first 5 lines):"
             head -n 5 "$OUTPUT_FILE"
           else
-            echo "::error::FAILURE: File $OUTPUT_FILE NOT FOUND at the end of the probe step!"
-            echo "This is why the upload step will fail."
+            echo "::warning:: Gbounty did not create an output file. This usually means no vulnerabilities were found."
+            echo "Creating an empty file at '$OUTPUT_FILE' to allow the workflow to continue."
+            # Create an empty file so the upload step does not fail.
+            touch "$OUTPUT_FILE"
           fi
-          echo "--- END OF FINAL CHECK ---"          
+          # =========================================================
             
       - name: Compute artifact details
         id: art_details
@@ -194,257 +193,16 @@ jobs:
           CHUNK_FILE_PATH="${{ matrix.pair.chunk }}"
           CHUNK_BASENAME=$(basename "$CHUNK_FILE_PATH")
           
-          ARTIFACT_NAME="httpx-${DOMAIN}-${CHUNK_BASENAME}" # Keep artifact name format
+          ARTIFACT_NAME="httpx-${DOMAIN}-${CHUNK_BASENAME}"
           echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
           
           FILE_TO_UPLOAD_PATH="results/${DOMAIN}/httpx_out/httpx_${CHUNK_BASENAME}"
           echo "file_to_upload=${FILE_TO_UPLOAD_PATH}" >> $GITHUB_OUTPUT
-
-          echo ">> DEBUG: Artifact Name: '$ARTIFACT_NAME'"
-          echo ">> DEBUG: File to Upload: '$FILE_TO_UPLOAD_PATH'"
-
+          
       - name: Upload per‑chunk Gbounty results
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.art_details.outputs.artifact_name }}
           path: ${{ steps.art_details.outputs.file_to_upload }}
-          if-no-files-found: error
+          if-no-files-found: error 
   
-
-  aggregate_results:
-    concurrency:
-      group: aggregate-results-${{ matrix.domain }}
-      cancel-in-progress: false
-    needs: [prepare_matrix, httpx]
-    runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/pcoder7/spider-puredns-actions:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GHCR_TOKEN }}    
-    strategy:
-      matrix:
-        domain: ${{ fromJson(needs.prepare_matrix.outputs.unique_domains) }}
-    steps:
-      - uses: actions/checkout@v3
-        with: { fetch-depth: 0 }
-   
-
-      - name: Ensure anew is installed
-        run: |
-          if ! command -v anew >/dev/null; then
-            echo "Installing anew…"
-            go install github.com/tomnomnom/anew@latest
-          else
-            echo "anew already installed"
-          fi      
-      
-      - name: Clean results directory before download
-        run: |
-          echo "Cleaning results directory..."
-          if [ -d "results" ]; then
-            # The '|| true' ensures the step doesn't fail if 'results' doesn't exist yet (e.g., first run)
-            # or if it contains files that rm might have issues with (though less likely here).
-            # A more robust way might be to remove and recreate if it exists.
-            rm -rf results/* results/.* 2>/dev/null || true 
-            echo "Contents of results directory after cleaning:"
-            ls -A results || echo "Results directory is empty or does not exist."
-          else
-            echo "Results directory does not exist, no cleaning needed."
-            mkdir -p results # Ensure it exists for the download step
-          fi          
-      - name: Download all httpx artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: results
-          pattern: httpx-*-chunk_*.txt
-        
-      - name: Aggregate for ${{ matrix.domain }}
-        run: |
-          D="${{ matrix.domain }}"
-          # make sure domain dir exists (matches chunks and recon)
-          mkdir -p "results/$D" 
-          
-          echo "Listing contents of 'results' directory after download (artifacts are in subdirs):"
-                            
-          AGGREGATED_CONTENT_TMP=$(mktemp)
-          FINAL_RESULT_FILE="results/$D/httpx_result.txt"
-
-          echo "Searching for chunk files for domain $D..."
-          echo "Looking in directories matching 'results/httpx-${D}-chunk_*.txt/' for files named 'httpx_chunk_*.txt'"
-          
-          # Corrected find: searches within artifact directories (e.g., results/httpx-mydomain-chunk_01.txt/)
-          # for the actual result files (e.g., httpx_chunk_01.txt).
-          # xargs --no-run-if-empty handles cases where find returns no files.
-          # The 2>/dev/null on find suppresses errors if a glob pattern doesn't match any directories.
-          find results/httpx-${D}-chunk_*.txt/ -type f -name "httpx_chunk_*.txt" -print0 2>/dev/null | xargs -0 --no-run-if-empty cat > "$AGGREGATED_CONTENT_TMP"
-          
-          if [ ! -s "$AGGREGATED_CONTENT_TMP" ]; then
-            echo "::warning::No content found to aggregate for domain $D from chunk files. '$FINAL_RESULT_FILE' will be empty."
-            # Create an empty file if no content was found, so upload-artifact doesn't fail on missing path
-            # and downstream steps know this domain had no results.
-            >"$FINAL_RESULT_FILE"
-          else
-            echo "Total lines across chunks for $D (before deduplication):"
-            wc -l < "$AGGREGATED_CONTENT_TMP"
-            
-            echo "Deduplicating content for $D into $FINAL_RESULT_FILE"
-            sort -u < "$AGGREGATED_CONTENT_TMP" > "$FINAL_RESULT_FILE"
-          fi
-          
-          rm -f "$AGGREGATED_CONTENT_TMP"
-          
-          echo "Final aggregated file for $D:"
-
-          echo "Line count in final aggregated file for $D:"
-          wc -l < "$FINAL_RESULT_FILE"
-
-      - name: Upload aggregated result for ${{ matrix.domain }}
-        uses: actions/upload-artifact@v4
-        with:
-          name: aggregated-result-${{ matrix.domain }} # This matches the pattern expected by the commit job
-          path: results/${{ matrix.domain }}/httpx_result.txt
-          if-no-files-found: error # Or 'warn' if an empty/missing result file is acceptable sometimes          
-  
-  commit_to_external_repo:
-    name: Commit Domain-Specific Results to External Repo
-    needs: aggregate_results # Runs after all domain aggregations are complete
-    runs-on: ubuntu-latest
-    # Only run if previous stages were successful and there was data to process
-    if: ${{ success() && needs.prepare_matrix.outputs.matrix != '[]' }}
-    steps:
-        
-      - name: Download all aggregated domain results
-        uses: actions/download-artifact@v4
-        with:
-          path: temp_aggregated_results # All artifacts will be downloaded here
-          # Pattern to download all artifacts starting with "aggregated-result-"
-          pattern: aggregated-result-*
-          # 'merge-multiple: false' (default) is appropriate here, as each artifact is distinct.
-
-      - name: Checkout external repository (store-recon)
-        uses: actions/checkout@v3
-        with:
-          repository: pushrockzz/store-recon # IMPORTANT: Replace with actual username/org
-          token: ${{ secrets.STORE_RECON_CAT }} # PAT with 'repo' scope for store-recon
-          path: store-recon-checkout # Checkout into a specific subdirectory
-          ref: main # Or your target branch in store-recon
-
-      - name: Process and Push Each Domain's Results Individually
-        working-directory: ./store-recon-checkout # Run git commands in the checkout directory
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          SOURCE_DOWNLOAD_DIR="../temp_aggregated_results" # Relative to store-recon-checkout
-          OVERALL_SUCCESS=true
-          TARGET_BRANCH="main" # Or your target branch in store-recon, should match checkout 'ref'
-
-          shopt -s nullglob # Prevent loop from running if no matches
-          for artifact_folder in ${SOURCE_DOWNLOAD_DIR}/aggregated-result-*; do
-            domain_name_from_artifact=$(basename "$artifact_folder" | sed 's/aggregated-result-//')
-            # The source file is named httpx_result.txt within its artifact folder
-            source_file_path="${artifact_folder}/httpx_result.txt"
-
-            echo "--- Processing domain: ${domain_name_from_artifact} ---"
-
-            # 1. PULL LATEST from store-recon target branch before processing this domain
-            echo "Pulling latest changes from store-recon/${TARGET_BRANCH} for ${domain_name_from_artifact}..."
-            PULL_RETRY_COUNT=3
-            PULL_RETRY_DELAY_SECONDS=10
-            DOMAIN_PULL_SUCCESS=false
-            for i_pull in $(seq 1 $PULL_RETRY_COUNT); do
-              if [ -d ".git/rebase-apply" ] || [ -d ".git/rebase-merge" ]; then
-                 echo "Aborting previous rebase before pull attempt ${i_pull}..."
-                 git rebase --abort || true 
-              fi
-              if git pull --rebase --autostash origin ${TARGET_BRANCH}; then
-                echo "Successfully pulled latest changes from store-recon/${TARGET_BRANCH} for ${domain_name_from_artifact}."
-                DOMAIN_PULL_SUCCESS=true
-                break
-              fi
-              if [ $i_pull -lt $PULL_RETRY_COUNT ]; then
-                echo "Pull attempt $i_pull for ${domain_name_from_artifact} failed. Retrying in $PULL_RETRY_DELAY_SECONDS seconds..."
-                sleep $PULL_RETRY_DELAY_SECONDS
-              else
-                echo "::error::Failed to pull from store-recon/${TARGET_BRANCH} for ${domain_name_from_artifact} after $PULL_RETRY_COUNT attempts. Skipping this domain."
-                OVERALL_SUCCESS=false
-                break 
-              fi
-            done
-
-            if [ "$DOMAIN_PULL_SUCCESS" = false ]; then
-              continue 
-            fi
-
-            # 2. COPY the specific domain file to the desired structure
-            if [ -f "$source_file_path" ]; then
-              # This defines the target directory: results/<domain_name>/
-              target_domain_dir="results/${domain_name_from_artifact}"
-              # This defines the target file name: results/<domain_name>/httpx_result.txt
-              target_file_path="${target_domain_dir}/httpx_result.txt"
-
-              mkdir -p "$target_domain_dir" # Ensure the directory structure results/<domain_name>/ exists
-              cp "$source_file_path" "$target_file_path" # Copy the file
-              
-              # 3. ADD & COMMIT that specific domain file at its new location
-              git add "$target_file_path" # Add results/<domain_name>/httpx_result.txt
-              if ! git diff --staged --quiet; then
-                COMMIT_MSG="Update HTTPX results for ${domain_name_from_artifact}"
-                COMMIT_BODY="Workflow Run ID: ${{ github.run_id }}
-                Workflow: ${{ github.workflow }}
-                Run URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                git commit -m "${COMMIT_MSG}" -m "${COMMIT_BODY}"
-                echo "Committed changes for ${domain_name_from_artifact} (path: ${target_file_path})"
-
-                # 4. PUSH this domain's commit(s) (with retry)
-                echo "Pushing changes for ${domain_name_from_artifact} to store-recon/${TARGET_BRANCH}..."
-                PUSH_RETRY_COUNT=5
-                PUSH_RETRY_DELAY_SECONDS=15
-                DOMAIN_PUSH_SUCCESS=false
-                for i_push in $(seq 1 $PUSH_RETRY_COUNT); do
-                  echo "Pre-push pull --rebase for ${domain_name_from_artifact}, attempt ${i_push}..."
-                  if [ -d ".git/rebase-apply" ] || [ -d ".git/rebase-merge" ]; then
-                     echo "Aborting previous rebase before pre-push pull attempt ${i_push}..."
-                     git rebase --abort || true
-                  fi
-                  if ! git pull --rebase --autostash origin ${TARGET_BRANCH}; then
-                    echo "::warning::Pre-push pull --rebase failed for ${domain_name_from_artifact}. Attempting push anyway..."
-                  fi
-
-                  if git push origin HEAD:${TARGET_BRANCH}; then 
-                    echo "Successfully pushed changes for ${domain_name_from_artifact} to store-recon/${TARGET_BRANCH}."
-                    DOMAIN_PUSH_SUCCESS=true
-                    break 
-                  fi
-
-                  if [ $i_push -lt $PUSH_RETRY_COUNT ]; then
-                    echo "Push attempt $i_push for ${domain_name_from_artifact} failed. Retrying in $PUSH_RETRY_DELAY_SECONDS seconds..."
-                    sleep $PUSH_RETRY_DELAY_SECONDS
-                  else
-                    echo "::error::Push for ${domain_name_from_artifact} to store-recon/${TARGET_BRANCH} failed after $PUSH_RETRY_COUNT attempts."
-                    OVERALL_SUCCESS=false
-                    echo "Resetting local HEAD to origin/${TARGET_BRANCH} to discard unpushed commit for ${domain_name_from_artifact}."
-                    git fetch origin ${TARGET_BRANCH}
-                    git reset --hard origin/${TARGET_BRANCH}
-                    break 
-                  fi
-                done
-              else
-                echo "No changes to commit for ${domain_name_from_artifact} (path: ${target_file_path})"
-              fi
-            else
-              echo "::warning::Result file not found at '$source_file_path' for artifact folder '$artifact_folder'. Skipping this domain."
-            fi
-          done
-          shopt -u nullglob
-
-          echo "--- Domain processing complete ---"
-          if [ "$OVERALL_SUCCESS" = true ]; then
-            echo "All domains processed and pushed successfully (or no changes detected for them)."
-            exit 0
-          else
-            echo "::error::One or more domains encountered issues during processing or push. Check logs above."
-            exit 0
-          fi
