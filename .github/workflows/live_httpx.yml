@@ -166,7 +166,7 @@ jobs:
           # Gbounty's performance should be tested to see if this is necessary.
           # For now, we run one command per chunk.
           echo "— Launching Gbounty with 10 threads"
-          cat "$CH" | gbounty -silent -t 10 -timeout 15 -o "$OUTPUT_FILE"
+          cat "$CH" | gbounty -silent -c 10 -r 10 -p SQLi.bb2 -timeout 15 --markdown  -o "$OUTPUT_FILE"
           
           echo "Gbounty scan complete. Results are in $OUTPUT_FILE."
         
@@ -208,11 +208,8 @@ jobs:
           path: ${{ steps.art_details.outputs.file_to_upload }}
           if-no-files-found: error
   
-   
-            
-          
 
-aggregate_results:
+  aggregate_results:
     concurrency:
       group: aggregate-results-${{ matrix.domain }}
       cancel-in-progress: false
