@@ -104,11 +104,6 @@ jobs:
   httpx:
     needs: prepare_matrix
     runs-on: ubuntu-latest
-    container:
-      image: ghcr.io/pcoder7/spider-puredns-actions:latest
-      credentials:
-        username: ${{ github.actor }}
-        password: ${{ secrets.GHCR_TOKEN }}    
     if: ${{ needs.prepare_matrix.outputs.matrix != '[]' }}
     strategy:
       fail-fast: false
@@ -117,8 +112,6 @@ jobs:
       max-parallel: 20
 
     steps:
-     
-     
       - name: Ensure httpx & anew are installed
         run: |
          
@@ -140,7 +133,7 @@ jobs:
           # The ubuntu-latest runner has Go. If not, you would add an installation step here.
           echo "Installing Gbounty..."
           go install -v github.com/BountySecurity/gbounty/cmd/gbounty@main
-          gbounty -h     
+  
                 
       - name: Download chunk files
         uses: actions/download-artifact@v4
@@ -166,7 +159,7 @@ jobs:
           # Gbounty's performance should be tested to see if this is necessary.
           # For now, we run one command per chunk.
           echo "— Launching Gbounty with 10 threads"
-          cat "$CH" | gbounty -silent -c 10 -r 10 -p SQLi.bb2 -timeout 15 --markdown  -o "$OUTPUT_FILE"
+          cat "$CH" | gbounty -silent -c 10 -r 10 -p SQLi.bb2 --markdown  -o "$OUTPUT_FILE"
           
           echo "Gbounty scan complete. Results are in $OUTPUT_FILE."
         
