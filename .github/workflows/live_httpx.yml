@@ -152,7 +152,8 @@ jobs:
      
       - name: Probe with Gbounty on ${{ matrix.pair.domain }}
         shell: bash
-        run: |          D="${{ matrix.pair.domain }}"
+        run: |       
+          D="${{ matrix.pair.domain }}"
           CH="${{ matrix.pair.chunk }}"
           OUT="results/${D}/httpx_out"
           mkdir -p "$OUT"
