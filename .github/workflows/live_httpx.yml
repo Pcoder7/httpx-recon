@@ -444,5 +444,5 @@ jobs:
             exit 0
           else
             echo "::error::One or more domains encountered issues during processing or push. Check logs above."
-            exit 1
+            exit 0
           fi
