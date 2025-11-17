@@ -191,13 +191,21 @@ jobs:
         run: |
           DOMAIN="${{ matrix.pair.domain }}"
           CHUNK_FILE_PATH="${{ matrix.pair.chunk }}"
+          # Get basename, e.g., "chunk_01.txt"
           CHUNK_BASENAME=$(basename "$CHUNK_FILE_PATH")
           
-          ARTIFACT_NAME="httpx-${DOMAIN}-${CHUNK_BASENAME}"
+          # ==================== THE FIX IS HERE (Part 2) ====================
+          # We replace .txt with .json for both the artifact name and the upload path
+          # to match the file that was actually created.
+          
+          # New artifact name for clarity, e.g., "httpx-domain-chunk_01.json"
+          ARTIFACT_NAME="httpx-${DOMAIN}-${CHUNK_BASENAME%.txt}.json"
           echo "artifact_name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
           
-          FILE_TO_UPLOAD_PATH="results/${DOMAIN}/httpx_out/httpx_${CHUNK_BASENAME}"
+          # New path for the uploader, e.g., "results/domain/httpx_out/httpx_chunk_01.json"
+          FILE_TO_UPLOAD_PATH="results/${DOMAIN}/httpx_out/httpx_${CHUNK_BASENAME%.txt}.json"
           echo "file_to_upload=${FILE_TO_UPLOAD_PATH}" >> $GITHUB_OUTPUT
+
           
       - name: Upload per‑chunk Gbounty results
         uses: actions/upload-artifact@v4
