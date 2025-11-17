@@ -17,7 +17,7 @@ jobs:
       matrix: ${{ steps.set_matrix.outputs.matrix }}
       unique_domains: ${{ steps.set_matrix.outputs.unique_domains }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with: 
           fetch-depth: 0 
 
@@ -139,7 +139,7 @@ jobs:
         run: |
           # The ubuntu-latest runner has Go. If not, you would add an installation step here.
           echo "Installing Gbounty..."
-          go install -v github.com/BountySecurity/gbounty/v2/cmd/gbounty@latest
+          go install -v github.com/BountySecurity/gbounty/cmd/gbounty@main
           gbounty -h     
                 
       - name: Download chunk files
