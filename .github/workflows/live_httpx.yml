@@ -157,25 +157,32 @@ jobs:
           CH="${{ matrix.pair.chunk }}"
           OUT="results/${D}/httpx_out"
           mkdir -p "$OUT"
-      
-          # Get the basename of the chunk, e.g., "chunk_01.txt"
-          CHUNK_BASENAME=$(basename "$CH")
 
-          EXPECTED_OUTPUT_FILE="${OUT}/httpx_${CHUNK_BASENAME%.txt}.json"
+          EXPECTED_OUTPUT_FILE="${OUT}/httpx_$(basename "$CH" | sed 's/\.txt$/.json/') "
+          GBOUNTY_OUTPUT_BASE="${OUT}/httpx_$(basename "$CH" .txt)"
 
-          GBOUNTY_OUTPUT_BASE="${OUT}/httpx_${CHUNK_BASENAME%.txt}"
-          # =================================================================
-
+          # === STEP 3: LIST FILES *BEFORE* THE SCAN ===
+          echo "--- Listing Directory Contents (BEFORE SCAN) ---"
+          ls -laR results
+          echo "------------------------------------------------"
+          
           echo "▶ Processing $CH with Gbounty for JSON output"
           echo "  - Instructing Gbounty to write to base: ${GBOUNTY_OUTPUT_BASE}"
           echo "  - Expecting final JSON file at: ${EXPECTED_OUTPUT_FILE}"
-          
-          # Run the command with the --json flag
-          gbounty --urls-file "$CH" -silent -c 10 -r 10 -p SQLi_StatusCode.bb2 --json -o "$GBOUNTY_OUTPUT_BASE"
-          
+
+          # === STEP 4: RUN THE SCAN AND CAPTURE ALL OUTPUT ===
+          # We will redirect stderr (2) to stdout (1) to make sure we see any errors
+          gbounty --urls-file "$CH" -c 10 -r 10 -p SQLi_StatusCode.bb2 --json -o "$GBOUNTY_OUTPUT_BASE" 2>&1
+
           echo "Gbounty scan finished."
 
-          # This check now looks for the correct final JSON filename
+          # === STEP 5: LIST FILES *AFTER* THE SCAN (MOST IMPORTANT STEP) ===
+          echo "--- Listing Directory Contents (AFTER SCAN) ---"
+          # This will show us if ANY file was created, even with a different name or in a different location.
+          ls -laR results
+          echo "-----------------------------------------------"
+
+          # === STEP 6: CHECK FOR THE EXPECTED FILE (NO CHANGES HERE) ===
           if [ -f "$EXPECTED_OUTPUT_FILE" ]; then
             echo "SUCCESS: Output file '$EXPECTED_OUTPUT_FILE' was created by Gbounty."
             ls -l "$EXPECTED_OUTPUT_FILE"
