@@ -162,7 +162,7 @@ jobs:
           echo "▶ Processing $CH — $LINES lines with Gbounty"
 
           # Define the output file path. The aggregation job expects this naming convention.
-          OUTPUT_FILE="${OUT}/httpx_$(basename "$CH").txt"
+          OUTPUT_FILE="${OUT}/httpx_$(basename "$CH")"
 
           # The logic for splitting large files into sub-chunks is removed for simplicity.
           # Gbounty's performance should be tested to see if this is necessary.
@@ -172,16 +172,12 @@ jobs:
           
           echo "Gbounty scan finished."
 
-          # ==================== THE FIX IS HERE ====================
-          # Check if the output file was actually created by Gbounty.
+          # This check will now work correctly
           if [ -f "$OUTPUT_FILE" ]; then
             echo "SUCCESS: Output file '$OUTPUT_FILE' was created by Gbounty."
-            echo "Contents (first 5 lines):"
-            head -n 5 "$OUTPUT_FILE"
+            ls -l "$OUTPUT_FILE"
           else
-            echo "::warning:: Gbounty did not create an output file. This usually means no vulnerabilities were found."
-            echo "Creating an empty file at '$OUTPUT_FILE' to allow the workflow to continue."
-            # Create an empty file so the upload step does not fail.
+            echo "::warning:: Gbounty did not create an output file. Creating an empty one."
             touch "$OUTPUT_FILE"
           fi
           # =========================================================
