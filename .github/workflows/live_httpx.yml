@@ -161,27 +161,21 @@ jobs:
           # Get the basename of the chunk, e.g., "chunk_01.txt"
           CHUNK_BASENAME=$(basename "$CH")
 
-          # ==================== THE FIX IS HERE ====================
-          # The final filename we EXPECT to be created and want to upload.
-          # e.g., results/domain/httpx_out/httpx_chunk_01.txt
-          EXPECTED_OUTPUT_FILE="${OUT}/httpx_${CHUNK_BASENAME}"
+          EXPECTED_OUTPUT_FILE="${OUT}/httpx_${CHUNK_BASENAME%.txt}.json"
 
-          # The filename BASE we will pass to Gbounty's -o flag.
-          # We remove the ".txt" from the end of the chunk's basename.
-          # e.g., "httpx_chunk_01"
           GBOUNTY_OUTPUT_BASE="${OUT}/httpx_${CHUNK_BASENAME%.txt}"
-          # =========================================================
+          # =================================================================
 
-          echo "▶ Processing $CH with Gbounty"
+          echo "▶ Processing $CH with Gbounty for JSON output"
           echo "  - Instructing Gbounty to write to base: ${GBOUNTY_OUTPUT_BASE}"
-          echo "  - Expecting final file at: ${EXPECTED_OUTPUT_FILE}"
+          echo "  - Expecting final JSON file at: ${EXPECTED_OUTPUT_FILE}"
           
-          # Run the command using the BASE name for the output flag
-          gbounty --urls-file "$CH" -silent -c 10 -r 10 -p SQLi_StatusCode.bb2 --markdown -o "$GBOUNTY_OUTPUT_BASE"
+          # Run the command with the --json flag
+          gbounty --urls-file "$CH" -silent -c 10 -r 10 -p SQLi_StatusCode.bb2 --json -o "$GBOUNTY_OUTPUT_BASE"
           
           echo "Gbounty scan finished."
 
-          # This check now looks for the CORRECT final filename
+          # This check now looks for the correct final JSON filename
           if [ -f "$EXPECTED_OUTPUT_FILE" ]; then
             echo "SUCCESS: Output file '$EXPECTED_OUTPUT_FILE' was created by Gbounty."
             ls -l "$EXPECTED_OUTPUT_FILE"
